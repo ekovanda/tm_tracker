@@ -3,6 +3,7 @@ from typing import Dict
 
 from authentication import get_ubisoft_authentication_ticket, get_nadeo_jwt_token
 from live_services import get_club_track_pbs, postprocess_club_track_pbs
+from utils import prettify_time
 from tm_lookups import CLUBS, TRACKS, PLAYERS
 
 
@@ -24,7 +25,7 @@ def main():
         st.header(pbs["track"].name)
         for idx, player in enumerate(pbs["players"]):
             icons = ["🏆", "🥈", "🥉"]
-            st.write(f"### {icons[idx]} {player["pb"]}: \t {player["player"].alias or player["player"].name}")
+            st.write(f"### {icons[idx]} {prettify_time(player["pb"])}: \t {player["player"].alias or player["player"].name}")
 
 if __name__ == "__main__":
     main()
