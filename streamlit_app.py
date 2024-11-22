@@ -17,6 +17,27 @@ def main():
 
     # App Body
     st.title("Trackmania Tracker 🏆🏎")
+
+    # Using "with" notation
+    with st.sidebar:
+        add_radio = st.radio(
+            label = "Chose Page",
+            options = ("Overview", "Player View", "Track View")
+        )
+     
+    if add_radio == "Player View":
+        player_focus_page()
+    elif add_radio == "Track View":
+        track_focus_page()
+    else:
+         overview_page()
+
+
+def track_focus_page():
+    """
+    Shows ...
+    """
+    st.write("More track-specific stats to come.")
     selected_track = st.selectbox("Track Number", options=list(range(1,26)))
 
     if selected_track:
@@ -26,6 +47,16 @@ def main():
         for idx, player in enumerate(pbs["players"]):
             icons = ["🏆", "🥈", "🥉"]
             st.write(f"### {icons[idx]} {prettify_time(player["pb"])}: \t {player["player"].alias or player["player"].name}")
+
+def player_focus_page():
+    """
+    Shows ...
+    """
+    st.write("More player-specific stats to come.")
+
+def overview_page():
+    st.write("Overview page to come")
+
 
 if __name__ == "__main__":
     main()
