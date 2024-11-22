@@ -18,10 +18,9 @@ def main():
     # App Body
     st.title("Trackmania Tracker 🏆🏎")
 
-    # Using "with" notation
     with st.sidebar:
         add_radio = st.radio(
-            label = "Chose Page",
+            label = "Choose a Page",
             options = ("Overview", "Player View", "Track View")
         )
      
@@ -52,10 +51,10 @@ def player_focus_page():
     """
     Shows ...
     """
-    st.write("More player-specific stats to come.")
+    st.write("### More player-specific stats to come.")
 
 def overview_page():
-    st.write("Overview page to come")
+    st.write("### Overview page to come")
 
 
 if __name__ == "__main__":
