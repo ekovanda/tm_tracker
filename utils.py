@@ -10,6 +10,9 @@ def prettify_time(time: int) -> str:
 
     e.g: 61102 -> 01:01.102
     """
+    if time == math.inf:
+        return "∞"
+    
     minutes: int = math.floor(time / 60_000)
     if minutes < 10:
         minutes_component = "0"+str(minutes)
@@ -22,6 +25,6 @@ def prettify_time(time: int) -> str:
     else:
         seconds_component = str(seconds)
     
-    thousands_component = str(time)[-3:]
+    thousands_component = str(time)[-3:].ljust(3, "0")
 
     return f"{minutes_component}:{seconds_component}.{thousands_component}"

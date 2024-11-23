@@ -48,7 +48,7 @@ class Player:
 
 
 PLAYERS: List[Player] = [
-    Player(name="EljayKay", account_id="7e468ff6-4558-43ce-ad23-591dd86291c0", alias="Elliot"),
-    Player(name="LryKo", account_id="f00ab19a-14e5-4e6e-9a45-78f1af8487e1", alias="Ellery"),
+    Player(name="EljayKay", account_id="7e468ff6-4558-43ce-ad23-591dd86291c0", alias="Eljay"),
+    Player(name="LryKo", account_id="f00ab19a-14e5-4e6e-9a45-78f1af8487e1", alias="Lry"),
     Player(name="Timo._.o", account_id="b9b79f89-19e7-4f26-be01-03556b8890b9", alias="Timo")
 ]

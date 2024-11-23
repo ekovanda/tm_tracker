@@ -3,7 +3,7 @@ from typing import Dict
 import pandas as pd
 
 from live_services import get_club_track_pbs, postprocess_club_track_pbs
-#from utils import prettify_time
+from utils import prettify_time
 from tm_lookups import CLUBS
 from player import PLAYERS
 from track import TRACKS
@@ -85,6 +85,6 @@ def show_leader_table() -> None:
         track.get_record(st.session_state["all_pbs"][idx])
         for color, track_range in track_ranges.items():
             if idx in track_range:
-                leaders[color].append(f"{track.record["player"].alias} +{track.record["lead"]}")
+                leaders[color].append(f"{track.record["player"].alias} +{prettify_time(track.record["lead"])}")
 
     st.table(pd.DataFrame(leaders))

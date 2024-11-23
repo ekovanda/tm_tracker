@@ -1,8 +1,5 @@
 from typing import Dict, List
-from player import Player
-from utils import prettify_time
-
-from player import PLAYERS
+import math
 
 class Track:
     def __init__(self, name: str, uid: str):
@@ -13,7 +10,15 @@ class Track:
         """
         Sets self.record.
         """
-        self.record = {"time": 0, "player": PLAYERS[0], "lead": prettify_time(123)}
+        try:
+            lead = pbs["players"][1]["pb"] - pbs["players"][0]["pb"]
+        except IndexError:
+            lead = math.inf
+
+        self.record = {
+            "time": pbs["players"][0]["pb"],
+            "player": pbs["players"][0]["player"],
+            "lead": lead}
 
 # Manually obtained from: https://trackmania.io/#/campaigns/0/77963 
 TRACKS: List[Track] = [
