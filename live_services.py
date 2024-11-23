@@ -2,8 +2,9 @@
 API requests against Nadeo Live Services endpoints
 """
 from typing import Dict
-from tm_lookups import Club, Track, Player
-from tm_lookups import PLAYERS, TRACKS
+from player import Player, PLAYERS
+from track import Track, TRACKS
+from tm_lookups import Club
 import requests
 import json
 
