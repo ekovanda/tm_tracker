@@ -20,6 +20,7 @@ All notable changes to this project are documented here.
 
 ### Changed
 
+- 2026-08-08T16:02:34Z: Updated the planning workflow so an emptied sketchbook contains only its heading, with the convention documented for developers. A commit ID is not applicable before the resulting commit exists.
 - 2026-08-08T15:57:47Z: Reconciled player colors across timer, Bingo board, and record indicators, with readable dark text for yellow board cells. A commit ID is not applicable before the resulting commit exists.
 - 2026-08-08T15:55:14Z: Added project and developer README documentation and updated `implement-next` to review and synchronize both documents with implementation and design decisions. A commit ID is not applicable before the resulting commit exists.
 - 2026-08-08T15:48:04Z: Added independently controlled ten-minute timers for each player, with one-second countdown refreshes, depleting progress bars, and responsive timer controls. A commit ID is not applicable before the resulting commit exists.

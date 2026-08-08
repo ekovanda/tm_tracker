@@ -76,7 +76,7 @@ Behavior-changing Python modules should have focused tests and at least 85% line
 
 ## Workflow Documents
 
-- `development-docs/SKETCHBOOK.md` is the internal place for rough ideas and requirements.
+- `development-docs/SKETCHBOOK.md` is the internal place for rough ideas and requirements; between captures it contains only its heading.
 - `development-docs/IMPLEMENTATION-PLAN.md` is the concise, numbered list of testable implementation steps.
 - `development-docs/CHANGELOG.md` records user-visible completed changes under `Unreleased`.
 - The `plan-implementation` skill turns sketchbook ideas into a plan.

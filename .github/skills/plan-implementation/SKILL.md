@@ -38,11 +38,9 @@ One-sentence outcome.
 
 ```markdown
 # Sketchbook
-
-Add rough feature ideas here. Include the desired outcome, important constraints, and examples when known.
 ```
 
-Do not discard requirements; transfer them into the plan first.
+Leave the file with only the heading so an emptied sketchbook has no default instructional sentence. Do not discard requirements; transfer them into the plan first.
 
 ## Validation Planning
 
