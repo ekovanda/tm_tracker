@@ -65,6 +65,7 @@ class FakeStreamlit:
         self.markdown_calls = []
         self.caption_calls = []
         self.info_calls = []
+        self.button_calls = []
         self.button_results = button_results or {}
 
     def columns(self, count):
@@ -83,6 +84,7 @@ class FakeStreamlit:
         return options[0]
 
     def button(self, *_args, **_kwargs):
+        self.button_calls.append((_args[0], _kwargs))
         return self.button_results.get(_args[0], False)
 
     def info(self, *_args, **_kwargs):
@@ -155,6 +157,36 @@ def test_active_session_refreshes_and_displays_status():
         bingo_page()
 
     poll.assert_called_once()
+    buttons = dict(fake_st.button_calls)
+    assert buttons["Start bingo"] == {
+        "disabled": True,
+        "type": "primary",
+        "icon": ":material/play_arrow:",
+        "use_container_width": True,
+    }
+    assert buttons["Stop bingo"] == {
+        "disabled": False,
+        "type": "secondary",
+        "icon": ":material/stop:",
+        "use_container_width": True,
+    }
+    assert buttons["Reset"] == {
+        "disabled": False,
+        "type": "secondary",
+        "icon": ":material/restart_alt:",
+        "use_container_width": True,
+    }
+    assert buttons["Start 10-minute timer"] == {
+        "disabled": False,
+        "type": "primary",
+        "icon": ":material/timer:",
+        "use_container_width": True,
+    }
+    assert buttons["Refresh rankings"] == {
+        "type": "secondary",
+        "icon": ":material/refresh:",
+        "use_container_width": True,
+    }
 
 
 def test_records_view_renders_newest_records_first():

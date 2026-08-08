@@ -15,12 +15,12 @@ repos:
 
       - id: pylint
         name: pylint
-        entry: pylint
+        entry: "uv run --active python -m pylint"
         language: system
         types: [python]
 
       - id: mypy
         name: mypy
-        entry: mypy
+        entry: "uv run --active python -m mypy"
         language: system
         types: [python]

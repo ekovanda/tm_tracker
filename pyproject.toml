@@ -21,6 +21,7 @@ dev = [
     "pytest",
     "pytest-cov",
     "ruff",
+    "types-requests",
 ]
 
 [tool.setuptools]

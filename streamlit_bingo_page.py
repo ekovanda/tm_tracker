@@ -187,11 +187,29 @@ def bingo_page() -> None:
     active_session = st.session_state.get(SESSION_KEY)
     start_column, stop_column, reset_column = st.columns(3)
     with start_column:
-        start_clicked = st.button("Start bingo", disabled=active_session is not None)
+        start_clicked = st.button(
+            "Start bingo",
+            disabled=active_session is not None,
+            type="primary",
+            icon=":material/play_arrow:",
+            use_container_width=True,
+        )
     with stop_column:
-        stop_clicked = st.button("Stop bingo", disabled=active_session is None)
+        stop_clicked = st.button(
+            "Stop bingo",
+            disabled=active_session is None,
+            type="secondary",
+            icon=":material/stop:",
+            use_container_width=True,
+        )
     with reset_column:
-        reset_clicked = st.button("Reset", disabled=active_session is None)
+        reset_clicked = st.button(
+            "Reset",
+            disabled=active_session is None,
+            type="secondary",
+            icon=":material/restart_alt:",
+            use_container_width=True,
+        )
 
     if start_clicked:
         now = datetime.now(UTC)
@@ -219,12 +237,21 @@ def bingo_page() -> None:
     now = datetime.now(UTC)
     manual_timer = get_manual_timer(now)
     timer_clicked = st.button(
-        "Start 10-minute timer", disabled=manual_timer.status != "ready"
+        "Start 10-minute timer",
+        disabled=manual_timer.status != "ready",
+        type="primary",
+        icon=":material/timer:",
+        use_container_width=True,
     )
     if timer_clicked:
         manual_timer = start_manual_timer_for_all(now)
         st.rerun()
-    refresh_clicked = st.button("Refresh rankings")
+    refresh_clicked = st.button(
+        "Refresh rankings",
+        type="secondary",
+        icon=":material/refresh:",
+        use_container_width=True,
+    )
     last_polled_at = st.session_state.get(LAST_POLLED_KEY)
     if refresh_clicked or poll_is_due(last_polled_at, now):
         with st.spinner("Refreshing rankings..."):

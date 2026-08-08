@@ -21,3 +21,5 @@ All notable changes to this project are documented here.
 ### Changed
 
 - 2026-08-08T15:19:54Z: Updated the create-commit workflow to preserve changelog history and require timestamped entries. A commit ID is not applicable before the resulting commit exists.
+- 2026-08-08T15:26:20Z: Improved Bingo action controls with clear primary and secondary states, icons, and responsive full-width layout. A commit ID is not applicable before the resulting commit exists.
+- 2026-08-08T15:30:15Z: Repaired the development hooks to run Pylint and mypy through the active Python environment and include requests type stubs. A commit ID is not applicable before the resulting commit exists.
