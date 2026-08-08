@@ -31,6 +31,12 @@ def test_password_verification_accepts_and_rejects_without_exposing_secret():
     assert not verify_app_password("wrong", encoded_hash)
 
 
+def test_password_verification_reads_streamlit_secret():
+    encoded_hash = password_hash("correct")
+    with patch("authentication.APP_PASSWORD_HASH", encoded_hash):
+        assert verify_app_password("correct")
+
+
 def test_password_verification_rejects_missing_or_malformed_configuration():
     with pytest.raises(PasswordConfigurationError, match="Missing APP_PASSWORD_HASH"):
         verify_app_password("correct", "")

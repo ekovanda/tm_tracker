@@ -18,7 +18,7 @@ Tests mirror these boundaries in `tests/`. Streamlit rendering tests use a fake 
 
 ## Runtime Flow
 
-1. `streamlit_app.main` requires the process-local app password in `APP_PASSWORD_HASH` before obtaining a Nadeo service token, displays the package version from installed metadata, and renders `bingo_page`. A successful password check is retained in the current Streamlit session state; the password and hash are never logged.
+1. `streamlit_app.main` requires the app password hash from Streamlit-managed `st.secrets["APP_PASSWORD_HASH"]` before obtaining a Nadeo service token, displays the package version from installed metadata, and renders `bingo_page`. A successful password check is retained in the current Streamlit session state; the password and hash are never logged.
 2. Before a session exists, the page loads official campaigns and renders a color-coded 4x4 board preview plus controls for campaign, player timer duration, grace period, and maximum game length. The shuffle button increments a persisted board seed in Streamlit session state and rerenders a new valid board.
 3. Starting a session passes a `BingoSettings` value to `start_session_in_state`, which loads exactly 16 playable tracks and stores a `BingoSession` in Streamlit session state. The settings panel is not rendered while that session exists.
 4. The active-session fragment renders timers, controls, status, the board, and records.

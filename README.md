@@ -33,16 +33,16 @@ uv pip install --python .venv_tm_tracker\Scripts\python.exe -e ".[dev]"
 .\.venv_tm_tracker\Scripts\Activate.ps1
 ```
 
-Create a private `.env` file with the required authentication value:
+Create `.streamlit/secrets.toml` with the required authentication values:
 
-```text
+```toml
 BASIC_AUTH=<service-account-basic-authorization>
 APP_PASSWORD_HASH=<pbkdf2-sha256-application-password-hash>
 ```
 
-Set `APP_PASSWORD_HASH` to the PBKDF2-SHA256 application password hash before running the app. The app requests this password before contacting Nadeo. Keep both values private and do not commit them.
+Set `APP_PASSWORD_HASH` to the PBKDF2-SHA256 application password hash before running the app. The app requests this password before contacting Nadeo. Keep this file private and do not commit it. Streamlit Cloud accepts the same TOML content in the app's Secrets settings.
 
-The application also accepts optional `PROJECT_NAME`, `MAINTAINER_HANDLE`, and `EMAIL` values for the identifying request `User-Agent`. Keep `.env` private and do not print or commit its contents.
+The application also accepts optional `PROJECT_NAME`, `MAINTAINER_HANDLE`, and `EMAIL` values for the identifying request `User-Agent`.
 
 ## Run
 

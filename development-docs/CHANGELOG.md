@@ -26,6 +26,7 @@ All notable changes to this project are documented here.
 
 ### Changed
 
+- 2026-08-08T20:00:48+02:00: Moved runtime authentication and optional app identity settings from `.env` to Streamlit-managed `.streamlit/secrets.toml` configuration. A commit ID is not applicable before the resulting commit exists.
 - 2026-08-08T19:38:29+02:00: Documented the changelog maintenance convention and reconciled Unreleased entries with the completed commit history. A commit ID is not applicable before the resulting commit exists.
 - 2026-08-08T19:35:49+02:00: Branded the Streamlit shell as TM Bingo with the logo favicon, packaged version caption, single Bingo header, and subtle Eljay credit. A commit ID is not applicable before the resulting commit exists.
 - 2026-08-08T19:28:07+02:00: Added an ignored local `scripts/` folder for reusable service-credential and application-password setup utilities; no tracked commit contains these ignored files.

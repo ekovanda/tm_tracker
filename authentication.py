@@ -1,21 +1,29 @@
 import base64
 import hashlib
 import json
-import os
 import secrets
 from datetime import UTC, datetime, timedelta
 
 import requests
-from dotenv import load_dotenv
+import streamlit as st
 
 from config import UBISOFT_APP_ID
 
-load_dotenv()
-BASIC_AUTH = os.getenv("BASIC_AUTH")
-APP_PASSWORD_HASH = os.getenv("APP_PASSWORD_HASH")
-EMAIL = os.getenv("EMAIL")
-PROJECT_NAME = os.getenv("PROJECT_NAME", "Eljay's TM Tracker")
-MAINTAINER_HANDLE = os.getenv("MAINTAINER_HANDLE", "Eljay")
+
+def _get_secret(name: str, default: str | None = None) -> str | None:
+    """Read an app setting from Streamlit-managed secrets."""
+
+    try:
+        return st.secrets.get(name, default)
+    except (FileNotFoundError, RuntimeError):
+        return default
+
+
+BASIC_AUTH = _get_secret("BASIC_AUTH")
+APP_PASSWORD_HASH = _get_secret("APP_PASSWORD_HASH")
+EMAIL = _get_secret("EMAIL")
+PROJECT_NAME = _get_secret("PROJECT_NAME", "Eljay's TM Tracker")
+MAINTAINER_HANDLE = _get_secret("MAINTAINER_HANDLE", "Eljay")
 REQUEST_TIMEOUT_SECONDS = 30
 TOKEN_REFRESH_URL = (
     "https://prod.trackmania.core.nadeo.online/v2/authentication/token/refresh"
@@ -38,7 +46,8 @@ def verify_app_password(password: str, encoded_hash: str | None = None) -> bool:
     stored_hash = encoded_hash if encoded_hash is not None else APP_PASSWORD_HASH
     if not stored_hash:
         raise PasswordConfigurationError(
-            "Missing APP_PASSWORD_HASH. Set a PBKDF2 password hash in .env."
+            "Missing APP_PASSWORD_HASH. Set a PBKDF2 password hash in "
+            ".streamlit/secrets.toml."
         )
 
     try:

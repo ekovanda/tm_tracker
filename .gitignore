@@ -1,5 +1,6 @@
 *venv*
 .env
+.streamlit/secrets.toml
 scratch.ipynb
 __pycache__/
 *.egg-info/
