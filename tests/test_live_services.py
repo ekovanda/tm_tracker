@@ -139,3 +139,16 @@ def test_club_track_processing_and_lookup_helpers():
         _get_track_by_uid("missing", tracks=[])
     with pytest.raises(ValueError):
         _get_player_by_account_id("missing", players=[])
+
+
+def test_postprocess_can_use_campaign_track_metadata():
+    campaign_track = TRACKS[0].__class__("Campaign 1", TRACKS[0].uid, number=1)
+    raw = {
+        "mapUid": campaign_track.uid,
+        "length": 1,
+        "top": [{"accountId": PLAYERS[0].account_id, "score": 60_000}],
+    }
+
+    processed = postprocess_club_track_pbs(raw, tracks=[campaign_track])
+
+    assert processed["track"] is campaign_track

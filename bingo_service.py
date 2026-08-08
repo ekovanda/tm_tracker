@@ -56,7 +56,7 @@ def _live_record_loader(track: Track, jwt_token: str) -> ProcessedRecord:
     raw_record = live_services.get_club_track_pbs(
         CLUBS["Elliot"], track, jwt_token=jwt_token
     )
-    return live_services.postprocess_club_track_pbs(raw_record)
+    return live_services.postprocess_club_track_pbs(raw_record, tracks=[track])
 
 
 def _new_entries(

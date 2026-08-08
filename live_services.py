@@ -123,7 +123,7 @@ def get_club_track_pbs(
     return json.loads(club_track_pbs.text)
 
 
-def postprocess_club_track_pbs(club_track_pbs: dict) -> dict:
+def postprocess_club_track_pbs(club_track_pbs: dict, tracks=None) -> dict:
     """
     Returns Dict of:
     {
@@ -137,7 +137,7 @@ def postprocess_club_track_pbs(club_track_pbs: dict) -> dict:
         ]
     }
     """
-    track = _get_track_by_uid(club_track_pbs["mapUid"])
+    track = _get_track_by_uid(club_track_pbs["mapUid"], tracks=tracks)
 
     num_players: int = club_track_pbs["length"]
     players: list[dict[str, Player | int | None]] = [
