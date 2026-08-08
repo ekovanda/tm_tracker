@@ -3,14 +3,16 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import streamlit_bingo_page as bingo_page_module
-from bingo import BingoState, TrackRanking
+from bingo import BingoState, ManualTimerState, TrackRanking
 from bingo_service import BingoSession, RecordEntry
 from player import PLAYERS
 from streamlit_bingo_page import (
     _render_board,
     _render_cell,
+    _render_records,
     bingo_page,
     display_deadline,
+    display_manual_timer,
     display_margin,
     owner_color,
     poll_is_due,
@@ -36,6 +38,19 @@ def test_board_display_helpers_format_owner_margin_and_deadline():
     )
 
 
+def test_manual_timer_display_shows_remaining_and_terminal_states():
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    assert display_manual_timer(ManualTimerState(), now) == "Not started"
+    assert (
+        display_manual_timer(
+            ManualTimerState("active", now), now + timedelta(minutes=2, seconds=3)
+        )
+        == "07:57"
+    )
+    assert display_manual_timer(ManualTimerState("expired", now), now) == "Expired"
+    assert display_manual_timer(ManualTimerState("stopped", now), now) == "Stopped"
+
+
 class FakeColumn:
     def __enter__(self):
         return self
@@ -55,7 +70,7 @@ class FakeStreamlit:
     def columns(self, count):
         return [FakeColumn() for _ in range(count)]
 
-    def markdown(self, value, **kwargs):
+    def markdown(self, value, **_kwargs):
         self.markdown_calls.append(value)
 
     def header(self, *_args, **_kwargs):
@@ -159,7 +174,7 @@ def test_records_view_renders_newest_records_first():
     )
 
     with patch.object(bingo_page_module, "st", fake_st):
-        bingo_page_module._render_records(session)
+        _render_records(session)
 
     player_rows = [call for call in fake_st.markdown_calls if "<span" in call]
     assert player_rows[0].endswith(PLAYERS[1].alias)
@@ -188,7 +203,7 @@ def test_records_view_handles_empty_log():
     )
 
     with patch.object(bingo_page_module, "st", fake_st):
-        bingo_page_module._render_records(session)
+        _render_records(session)
 
     assert fake_st.info_calls == ["No new records observed yet."]
 

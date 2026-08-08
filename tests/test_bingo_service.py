@@ -6,6 +6,7 @@ from bingo_service import (
     REQUEST_DELAY_SECONDS,
     SESSION_KEY,
     BingoSession,
+    ManualTimerStore,
     PollSettings,
     poll_session,
     poll_session_in_state,
@@ -31,11 +32,14 @@ def make_tracks():
 
 
 def make_loader():
-    return lambda campaign_id, jwt_token: make_tracks()
+    def load(_campaign_id, _jwt_token):
+        return make_tracks()
+
+    return load
 
 
 def make_record_loader(owner=PLAYERS[1], time=60_000):
-    def load(track, jwt_token):
+    def load(track, _jwt_token):
         return {
             "track": track,
             "players": [
@@ -161,3 +165,12 @@ def test_state_helpers_require_a_session():
         poll_session_in_state({}, "jwt", START)
     with pytest.raises(TypeError, match="No active"):
         stop_session_in_state({})
+
+
+def test_manual_timer_store_is_shared_and_expires_from_reads():
+    store = ManualTimerStore()
+    store.start(START)
+
+    assert store.get(START + timedelta(minutes=1)).status == "active"
+    assert store.get(START + timedelta(minutes=10)).status == "expired"
+    assert store.reset().status == "ready"

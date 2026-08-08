@@ -140,7 +140,7 @@ def get_club_track_pbs(
 
     url = (
         "https://live-services.trackmania.nadeo.live/api/token/leaderboard/"
-        f"group/{group_uid}/map/{track.uid}/club/{club.clubId}/top?"
+        f"group/{group_uid}/map/{track.uid}/club/{club.club_id}/top?"
         f"length={length}&offset={offset}"
     )
 

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 @dataclass
 class Club:
-    clubId: str
+    club_id: str
     owner_account_id: str
     owner_alias: str | None
 

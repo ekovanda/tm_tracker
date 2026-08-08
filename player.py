@@ -2,8 +2,6 @@
 Contains main player class.
 """
 
-from typing import Dict, List
-
 
 class Player:
     def __init__(self, name: str, account_id: str, alias: str = ""):
@@ -11,7 +9,7 @@ class Player:
         self.account_id = account_id
         self.alias = alias if alias != "" else self.name
 
-    def get_rank_counts(self, all_pbs: Dict) -> None:
+    def get_rank_counts(self, all_pbs: dict) -> None:
         """
         Sets the attribute 'medal_count' which is a dict of:
         {"gold": a, "silver": b, "bronze": c, "unfinished": d}
@@ -36,7 +34,7 @@ class Player:
             else:
                 self.medal_count["unfinished"] += 1
 
-    def get_total_rank_points(self, all_pbs: Dict) -> None:
+    def get_total_rank_points(self, all_pbs: dict) -> None:
         """
         Sums up a player's rank points.
         Sets attribute 'total_rank_points' which is an int.
@@ -52,7 +50,7 @@ class Player:
         )
 
 
-PLAYERS: List[Player] = [
+PLAYERS: list[Player] = [
     Player(
         name="EljayKay",
         account_id="7e468ff6-4558-43ce-ad23-591dd86291c0",

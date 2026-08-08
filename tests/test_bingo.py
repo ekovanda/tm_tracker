@@ -3,11 +3,17 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from bingo import (
+    MANUAL_TIMER_DURATION,
+    ManualTimerState,
     build_bingo_grid,
+    manual_timer_remaining,
     rank_track,
     start_bingo,
+    start_manual_timer,
     stop_bingo,
+    stop_manual_timer,
     update_bingo_state,
+    update_manual_timer,
 )
 from player import PLAYERS
 from track import Track
@@ -38,7 +44,10 @@ def test_grid_has_one_track_from_each_batch_in_each_row_and_column():
     grid = build_bingo_grid(make_tracks())
     assert len(grid) == 4
     assert all(len(row) == 4 for row in grid)
-    batch = lambda number: (number - 1) // 5
+
+    def batch(number):
+        return (number - 1) // 5
+
     assert all({batch(track.number) for track in row} == {0, 1, 2, 3} for row in grid)
     assert all(
         {batch(grid[row][column].number) for row in range(4)} == {0, 1, 2, 3}
@@ -130,3 +139,29 @@ def test_game_expires_after_five_hours_and_manual_stop_is_terminal():
     stopped = stop_bingo(start_bingo(start))
     assert stopped.status == "stopped"
     assert stop_bingo(stopped) is stopped
+
+
+def test_manual_timer_counts_down_and_expires_after_ten_minutes():
+    start = datetime(2026, 1, 1, tzinfo=UTC)
+    timer = start_manual_timer(ManualTimerState(), start)
+
+    assert manual_timer_remaining(timer, start + timedelta(minutes=3, seconds=2)) == (
+        MANUAL_TIMER_DURATION - timedelta(minutes=3, seconds=2)
+    )
+    expired = update_manual_timer(timer, start + MANUAL_TIMER_DURATION)
+    assert expired.status == "expired"
+    assert manual_timer_remaining(expired, start + MANUAL_TIMER_DURATION) == timedelta(
+        0
+    )
+
+
+def test_manual_timer_start_stop_and_expiry_are_terminal():
+    start = datetime(2026, 1, 1, tzinfo=UTC)
+    stopped = stop_manual_timer(start_manual_timer(ManualTimerState(), start))
+
+    assert stopped.status == "stopped"
+    assert start_manual_timer(stopped, start) is stopped
+    expired = update_manual_timer(
+        start_manual_timer(ManualTimerState(), start), start + MANUAL_TIMER_DURATION
+    )
+    assert stop_manual_timer(expired) is expired

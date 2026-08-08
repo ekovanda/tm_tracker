@@ -4,9 +4,19 @@ import time
 from collections.abc import Callable, Iterable, MutableMapping
 from dataclasses import dataclass, replace
 from datetime import datetime
+from threading import Lock
 
 import live_services
-from bingo import BingoState, start_bingo, stop_bingo, update_bingo_state
+from bingo import (
+    BingoState,
+    ManualTimerState,
+    start_bingo,
+    start_manual_timer,
+    stop_bingo,
+    stop_manual_timer,
+    update_bingo_state,
+    update_manual_timer,
+)
 from player import PLAYERS, Player
 from tm_lookups import CLUBS
 from track import Track
@@ -17,6 +27,37 @@ ProcessedRecord = dict
 TrackLoader = Callable[[str, str], list[Track]]
 RecordLoader = Callable[[Track, str], ProcessedRecord]
 SleepFn = Callable[[float], None]
+
+
+class ManualTimerStore:
+    """Thread-safe process-wide storage shared by Streamlit viewers."""
+
+    def __init__(self) -> None:
+        self._state = ManualTimerState()
+        self._lock = Lock()
+
+    def get(self, now: datetime) -> ManualTimerState:
+        with self._lock:
+            self._state = update_manual_timer(self._state, now)
+            return self._state
+
+    def start(self, started_at: datetime) -> ManualTimerState:
+        with self._lock:
+            self._state = start_manual_timer(self._state, started_at)
+            return self._state
+
+    def stop(self) -> ManualTimerState:
+        with self._lock:
+            self._state = stop_manual_timer(self._state)
+            return self._state
+
+    def reset(self) -> ManualTimerState:
+        with self._lock:
+            self._state = ManualTimerState()
+            return self._state
+
+
+SHARED_MANUAL_TIMER = ManualTimerStore()
 
 
 @dataclass(frozen=True)
@@ -143,6 +184,30 @@ def stop_session(session: BingoSession) -> BingoSession:
     if session.state.status != "active":
         return session
     return replace(session, state=stop_bingo(session.state))
+
+
+def get_manual_timer(now: datetime) -> ManualTimerState:
+    """Read and expire the process-wide manual timer."""
+
+    return SHARED_MANUAL_TIMER.get(now)
+
+
+def start_manual_timer_for_all(started_at: datetime) -> ManualTimerState:
+    """Start the manual timer shared by all viewers of the app process."""
+
+    return SHARED_MANUAL_TIMER.start(started_at)
+
+
+def stop_manual_timer_for_all() -> ManualTimerState:
+    """Stop the manual timer shared by all viewers."""
+
+    return SHARED_MANUAL_TIMER.stop()
+
+
+def reset_manual_timer_for_all() -> ManualTimerState:
+    """Reset the shared manual timer for a new game."""
+
+    return SHARED_MANUAL_TIMER.reset()
 
 
 def start_session_in_state(

@@ -1,16 +1,23 @@
 """Streamlit setup and live board for the Trackmania bingo game."""
 
+from collections.abc import MutableMapping
 from datetime import UTC, datetime, timedelta
 from html import escape
+from typing import cast
 
 import streamlit as st
 
+from bingo import ManualTimerState, manual_timer_remaining
 from bingo_service import (
     SESSION_KEY,
     BingoSession,
+    get_manual_timer,
     poll_session_in_state,
+    reset_manual_timer_for_all,
     reset_session,
+    start_manual_timer_for_all,
     start_session_in_state,
+    stop_manual_timer_for_all,
     stop_session_in_state,
 )
 from live_services import Campaign, get_official_campaigns
@@ -45,6 +52,20 @@ def display_margin(margin: int | None) -> str:
     return f"+{prettify_time(margin)}" if margin is not None else "No margin"
 
 
+def display_manual_timer(timer: ManualTimerState, now: datetime) -> str:
+    """Format the shared timer for the session metrics."""
+
+    if timer.status == "ready":
+        return "Not started"
+    if timer.status == "expired":
+        return "Expired"
+    if timer.status == "stopped":
+        return "Stopped"
+    remaining = manual_timer_remaining(timer, now)
+    total_seconds = int(remaining.total_seconds())
+    return f"{total_seconds // 60:02d}:{total_seconds % 60:02d}"
+
+
 def display_deadline(started_at: datetime) -> str:
     """Format the five-hour deadline in the local timezone."""
 
@@ -54,6 +75,10 @@ def display_deadline(started_at: datetime) -> str:
 def _access_token() -> str:
     token = st.session_state["nadeo_jwt_token"]
     return token["accessToken"] if isinstance(token, dict) else token
+
+
+def _typed_session_state() -> MutableMapping[str, object]:
+    return cast(MutableMapping[str, object], st.session_state)
 
 
 def _campaigns() -> list[Campaign]:
@@ -119,7 +144,9 @@ def _render_records(session: BingoSession) -> None:
             st.markdown(f"**{prettify_time(entry.time)}**")
 
 
-def _render_session_metrics(session: BingoSession, now: datetime) -> None:
+def _render_session_metrics(
+    session: BingoSession, now: datetime, manual_timer: ManualTimerState
+) -> None:
     last_polled_at = st.session_state.get(LAST_POLLED_KEY)
     current_time = now.astimezone().strftime("%H:%M:%S")
     last_refresh = (
@@ -131,9 +158,11 @@ def _render_session_metrics(session: BingoSession, now: datetime) -> None:
     if session.state.winner:
         status = f"{status}: {session.state.winner.alias} wins"
 
-    status_column, current_column, refresh_column = st.columns(3)
+    status_column, timer_column, current_column, refresh_column = st.columns(4)
     with status_column:
         st.metric("Game status", status)
+    with timer_column:
+        st.metric("Shared timer", display_manual_timer(manual_timer, now))
     with current_column:
         st.metric("Current time", current_time)
     with refresh_column:
@@ -166,16 +195,19 @@ def bingo_page() -> None:
 
     if start_clicked:
         now = datetime.now(UTC)
+        reset_manual_timer_for_all()
         start_session_in_state(
-            st.session_state, campaign.campaign_id, _access_token(), now
+            _typed_session_state(), campaign.campaign_id, _access_token(), now
         )
         st.session_state[LAST_POLLED_KEY] = None
         st.rerun()
     if stop_clicked:
-        stop_session_in_state(st.session_state)
+        stop_session_in_state(_typed_session_state())
+        stop_manual_timer_for_all()
         st.rerun()
     if reset_clicked:
-        reset_session(st.session_state)
+        reset_session(_typed_session_state())
+        reset_manual_timer_for_all()
         st.session_state.pop(LAST_POLLED_KEY, None)
         st.rerun()
 
@@ -185,15 +217,22 @@ def bingo_page() -> None:
         return
 
     now = datetime.now(UTC)
+    manual_timer = get_manual_timer(now)
+    timer_clicked = st.button(
+        "Start 10-minute timer", disabled=manual_timer.status != "ready"
+    )
+    if timer_clicked:
+        manual_timer = start_manual_timer_for_all(now)
+        st.rerun()
     refresh_clicked = st.button("Refresh rankings")
     last_polled_at = st.session_state.get(LAST_POLLED_KEY)
     if refresh_clicked or poll_is_due(last_polled_at, now):
         with st.spinner("Refreshing rankings..."):
             active_session = poll_session_in_state(
-                st.session_state, _access_token(), now
+                _typed_session_state(), _access_token(), now
             )
         st.session_state[LAST_POLLED_KEY] = now
 
-    _render_session_metrics(active_session, now)
+    _render_session_metrics(active_session, now, manual_timer)
     _render_board(active_session)
     _render_records(active_session)

@@ -26,10 +26,13 @@ dev = [
 [tool.setuptools]
 py-modules = [
     "authentication",
+    "bingo",
+    "bingo_service",
     "config",
     "live_services",
     "player",
     "streamlit_app",
+    "streamlit_bingo_page",
     "tm_lookups",
     "track",
     "utils",

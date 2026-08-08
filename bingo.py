@@ -9,6 +9,7 @@ from track import Track
 
 GAME_DURATION = timedelta(hours=5)
 LINE_DURATION = timedelta(minutes=10)
+MANUAL_TIMER_DURATION = timedelta(minutes=10)
 PLAYABLE_TRACK_NUMBERS = (1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 16, 17, 18, 19)
 
 
@@ -34,6 +35,14 @@ class BingoState:
     timer_owner: Player | None = None
     timer_started_at: datetime | None = None
     winner: Player | None = None
+
+
+@dataclass(frozen=True)
+class ManualTimerState:
+    """State for the shared ten-minute manual timer."""
+
+    status: str = "ready"
+    started_at: datetime | None = None
 
 
 def build_bingo_grid(tracks: Iterable[Track]) -> tuple[tuple[Track, ...], ...]:
@@ -62,11 +71,16 @@ def build_bingo_grid(tracks: Iterable[Track]) -> tuple[tuple[Track, ...], ...]:
 
 
 def rank_track(
-    track: Track, player_times: Iterable[dict], players: Iterable[Player] = PLAYERS
+    track: Track,
+    player_times: Iterable[dict],
+    players: Iterable[Player] | None = None,
 ) -> TrackRanking:
     """Rank configured players by time and calculate the lead over second place."""
 
-    configured_players = {player.account_id: player for player in players}
+    configured_players = {
+        player.account_id: player
+        for player in (PLAYERS if players is None else players)
+    }
     rankings = sorted(
         (
             PlayerTime(configured_players[item["player"].account_id], item["pb"])
@@ -94,11 +108,12 @@ def rank_track(
 
 
 def _ranking_by_track(records: Iterable[dict]) -> dict[int, TrackRanking]:
-    return {
-        record["track"].number: rank_track(record["track"], record.get("players", []))
-        for record in records
-        if record["track"].number in PLAYABLE_TRACK_NUMBERS
-    }
+    rankings = {}
+    for record in records:
+        track = record["track"]
+        if track.number is not None and track.number in PLAYABLE_TRACK_NUMBERS:
+            rankings[track.number] = rank_track(track, record.get("players", []))
+    return rankings
 
 
 def _lines(board: tuple[tuple[TrackRanking, ...], ...]) -> list[tuple[Player, ...]]:
@@ -135,6 +150,44 @@ def stop_bingo(state: BingoState) -> BingoState:
     return replace(state, status="stopped")
 
 
+def start_manual_timer(
+    timer: ManualTimerState, started_at: datetime
+) -> ManualTimerState:
+    """Start the manual timer once it is ready."""
+
+    if timer.status != "ready":
+        return timer
+    return ManualTimerState(status="active", started_at=started_at)
+
+
+def stop_manual_timer(timer: ManualTimerState) -> ManualTimerState:
+    """Stop a running manual timer."""
+
+    if timer.status != "active":
+        return timer
+    return replace(timer, status="stopped")
+
+
+def update_manual_timer(timer: ManualTimerState, now: datetime) -> ManualTimerState:
+    """Expire an active manual timer when its ten-minute duration elapses."""
+
+    if (
+        timer.status == "active"
+        and timer.started_at is not None
+        and now - timer.started_at >= MANUAL_TIMER_DURATION
+    ):
+        return replace(timer, status="expired")
+    return timer
+
+
+def manual_timer_remaining(timer: ManualTimerState, now: datetime) -> timedelta:
+    """Return the non-negative time remaining on the manual timer."""
+
+    if timer.status != "active" or timer.started_at is None:
+        return timedelta(0)
+    return max(MANUAL_TIMER_DURATION - (now - timer.started_at), timedelta(0))
+
+
 def update_bingo_state(
     state: BingoState, records: Iterable[dict], now: datetime
 ) -> BingoState:
@@ -156,6 +209,8 @@ def update_bingo_state(
     board = tuple(
         tuple(
             rankings.get(track.number, TrackRanking(track, (), None, None))
+            if track.number is not None
+            else TrackRanking(track, (), None, None)
             for track in row
         )
         for row in grid_tracks
