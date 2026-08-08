@@ -437,6 +437,42 @@ def test_active_session_refreshes_and_displays_status():
         )
 
 
+def test_active_fragment_reads_canonical_session_instead_of_local_cache():
+    fake_st = FakeStreamlit()
+    track = Track("Track 1", "uid-1", 1)
+    local_session = BingoSession(
+        "campaign",
+        (track,),
+        BingoState(datetime(2026, 1, 1, tzinfo=UTC)),
+    )
+    canonical_session = BingoSession(
+        "campaign",
+        (track,),
+        BingoState(
+            datetime(2026, 1, 1, tzinfo=UTC),
+            winner=PLAYERS[0],
+            status="finished",
+        ),
+        records=(
+            RecordEntry(datetime(2026, 1, 2, tzinfo=UTC), track, PLAYERS[0], 59_000),
+        ),
+    )
+    get_canonical_game_store().start(local_session)
+    get_canonical_game_store().update_session(lambda _session: canonical_session)
+    fake_st.session_state["bingo_session"] = local_session
+
+    with (
+        patch.object(bingo_page_module, "st", fake_st),
+        patch.object(bingo_page_module, "poll_is_due", return_value=False),
+    ):
+        bingo_page_module._render_active_session_content()  # pylint: disable=protected-access
+
+    assert fake_st.session_state["bingo_session"] == canonical_session
+    assert any("Finished: Eljay wins" in call[0][1] for call in fake_st.metric_calls)
+    assert any(PLAYERS[0].alias in call for call in fake_st.markdown_calls)
+    assert any("Track 1" in call for call in fake_st.caption_calls)
+
+
 def test_records_view_renders_newest_records_first():
     fake_st = FakeStreamlit()
     first_track = Track("Track 1", "uid-1", 1)
@@ -594,7 +630,11 @@ def test_stop_and_reset_controls_delegate_to_service():
         patch.object(
             bingo_page_module, "get_official_campaigns", return_value=campaign
         ),
-        patch.object(bingo_page_module, "stop_canonical_game") as stop,
+        patch.object(
+            bingo_page_module,
+            "stop_canonical_game",
+            side_effect=get_canonical_game_store().stop,
+        ) as stop,
         patch.object(
             bingo_page_module,
             "poll_canonical_game",
@@ -603,6 +643,7 @@ def test_stop_and_reset_controls_delegate_to_service():
     ):
         bingo_page()
     stop.assert_called_once_with()
+    assert stop_st.session_state["bingo_session"].state.status == "stopped"
 
     reset_st = FakeStreamlit({"Reset": True})
     get_canonical_game_store().reset()
@@ -613,7 +654,11 @@ def test_stop_and_reset_controls_delegate_to_service():
         patch.object(
             bingo_page_module, "get_official_campaigns", return_value=campaign
         ),
-        patch.object(bingo_page_module, "reset_canonical_game") as reset,
+        patch.object(
+            bingo_page_module,
+            "reset_canonical_game",
+            side_effect=get_canonical_game_store().reset,
+        ) as reset,
         patch.object(
             bingo_page_module,
             "poll_canonical_game",
@@ -622,3 +667,4 @@ def test_stop_and_reset_controls_delegate_to_service():
     ):
         bingo_page()
     reset.assert_called_once_with()
+    assert "bingo_session" not in reset_st.session_state

@@ -404,7 +404,7 @@ def _render_grace_period(state, now: datetime) -> None:
 
 
 def _render_active_session_content() -> None:
-    active_session = st.session_state.get(SESSION_KEY)
+    active_session = _sync_canonical_session_to_state()
     if not isinstance(active_session, BingoSession):
         return
 
@@ -442,6 +442,8 @@ def _render_active_session_content() -> None:
             active_session = canonical_state.session
             if active_session is not None:
                 st.session_state[SESSION_KEY] = active_session
+            else:
+                st.session_state.pop(SESSION_KEY, None)
         st.session_state[LAST_POLLED_KEY] = now
 
     _render_session_metrics(active_session, now)
@@ -623,12 +625,14 @@ def bingo_page() -> None:
         )
 
     if stop_clicked:
-        stop_canonical_game()
+        stopped_state = stop_canonical_game()
+        st.session_state[SESSION_KEY] = stopped_state.session
         stop_manual_timers()
         st.rerun()
     if reset_clicked:
         reset_canonical_game()
         reset_manual_timers()
+        st.session_state.pop(SESSION_KEY, None)
         st.session_state.pop(LAST_POLLED_KEY, None)
         st.rerun()
 

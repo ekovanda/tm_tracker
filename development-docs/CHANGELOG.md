@@ -27,6 +27,7 @@ All notable changes to this project are documented here.
 
 ### Changed
 
+- 2026-08-08T20:45:55+02:00: Updated Streamlit rendering and controls to read the canonical Bingo game on every rerun, keeping boards, status, records, deadlines, timers, and stop/reset results synchronized across viewers. A commit ID is not applicable before the resulting commit exists.
 - 2026-08-08T20:36:14+02:00: Made leaderboard polling and Bingo transitions canonical so connected viewers share one processed snapshot, record history, ownership state, and game status. A commit ID is not applicable before the resulting commit exists.
 - 2026-08-08T20:35:00+02:00: Made Bingo start, stop, and reset actions canonical across connected viewers, preserving one shared board and returning reset games to shared pending setup. A commit ID is not applicable before the resulting commit exists.
 - 2026-08-08T20:23:34+02:00: Shared pending Bingo campaign, timing, and shuffle configuration across connected viewers while the app process is running. A commit ID is not applicable before the resulting commit exists.
