@@ -3,8 +3,10 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from bingo_service import (
+    REQUEST_DELAY_SECONDS,
     SESSION_KEY,
     BingoSession,
+    PollSettings,
     poll_session,
     poll_session_in_state,
     reset_session,
@@ -17,6 +19,10 @@ from player import PLAYERS
 from track import Track
 
 START = datetime(2026, 1, 1, tzinfo=UTC)
+
+
+def no_sleep(_delay: float) -> None:
+    pass
 
 
 def make_tracks():
@@ -57,18 +63,65 @@ def test_start_session_rejects_incomplete_campaign():
 
 def test_poll_logs_only_new_records_and_updates_bingo_state():
     session = start_session("campaign", "jwt", START, make_loader())
-    first = poll_session(session, "jwt", START, make_record_loader())
+    first = poll_session(
+        session,
+        "jwt",
+        START,
+        make_record_loader(),
+        PollSettings(sleep_fn=no_sleep),
+    )
     duplicate = poll_session(
-        first, "jwt", START + timedelta(minutes=1), make_record_loader()
+        first,
+        "jwt",
+        START + timedelta(minutes=1),
+        make_record_loader(),
+        PollSettings(sleep_fn=no_sleep),
     )
     changed = poll_session(
-        duplicate, "jwt", START + timedelta(minutes=2), make_record_loader(time=59_000)
+        duplicate,
+        "jwt",
+        START + timedelta(minutes=2),
+        make_record_loader(time=59_000),
+        PollSettings(sleep_fn=no_sleep),
     )
 
     assert len(first.records) == 32
     assert len(duplicate.records) == 32
     assert len(changed.records) == 48
     assert first.state.timer_owner is PLAYERS[1]
+
+
+def test_poll_paces_requests_in_track_order_with_configured_delay():
+    session = start_session("campaign", "jwt", START, make_loader())
+    loaded_numbers = []
+    delays = []
+
+    def load(track, _jwt_token):
+        loaded_numbers.append(track.number)
+        return make_record_loader()(track, _jwt_token)
+
+    poll_session(
+        session,
+        "jwt",
+        START,
+        load,
+        PollSettings(REQUEST_DELAY_SECONDS, delays.append),
+    )
+
+    assert loaded_numbers == [track.number for track in session.tracks]
+    assert delays == [REQUEST_DELAY_SECONDS] * (len(session.tracks) - 1)
+
+
+def test_poll_rejects_negative_request_delay():
+    session = start_session("campaign", "jwt", START, make_loader())
+
+    with pytest.raises(ValueError, match="cannot be negative"):
+        poll_session(
+            session,
+            "jwt",
+            START,
+            poll_settings=PollSettings(-0.1, no_sleep),
+        )
 
 
 def test_terminal_sessions_are_not_polled_again():
@@ -94,6 +147,7 @@ def test_streamlit_state_start_poll_stop_and_reset():
         "jwt",
         START,
         make_record_loader(),
+        PollSettings(sleep_fn=no_sleep),
     )
     assert state[SESSION_KEY] is polled
     stopped = stop_session_in_state(state)

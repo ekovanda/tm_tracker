@@ -1,5 +1,6 @@
 """Session-scoped orchestration for the Trackmania bingo game."""
 
+import time
 from collections.abc import Callable, Iterable, MutableMapping
 from dataclasses import dataclass, replace
 from datetime import datetime
@@ -11,9 +12,11 @@ from tm_lookups import CLUBS
 from track import Track
 
 SESSION_KEY = "bingo_session"
+REQUEST_DELAY_SECONDS = 0.5
 ProcessedRecord = dict
 TrackLoader = Callable[[str, str], list[Track]]
 RecordLoader = Callable[[Track, str], ProcessedRecord]
+SleepFn = Callable[[float], None]
 
 
 @dataclass(frozen=True)
@@ -35,6 +38,14 @@ class BingoSession:
     state: BingoState
     records: tuple[RecordEntry, ...] = ()
     seen_records: frozenset[tuple[str, str, int]] = frozenset()
+
+
+@dataclass(frozen=True)
+class PollSettings:
+    """Configurable pacing for the leaderboard requests in one poll."""
+
+    request_delay: float = REQUEST_DELAY_SECONDS
+    sleep_fn: SleepFn | None = None
 
 
 def start_session(
@@ -72,20 +83,23 @@ def _new_entries(
         track = record["track"]
         for result in record.get("players", []):
             player = result.get("player")
-            time = result.get("pb")
+            record_time = result.get("pb")
             if (
                 player is None
-                or time is None
+                or record_time is None
                 or player.account_id not in configured_players
             ):
                 continue
-            key = (track.uid, player.account_id, time)
+            key = (track.uid, player.account_id, record_time)
             if key in updated_seen:
                 continue
             updated_seen.add(key)
             entries.append(
                 RecordEntry(
-                    observed_at, track, configured_players[player.account_id], time
+                    observed_at,
+                    track,
+                    configured_players[player.account_id],
+                    record_time,
                 )
             )
 
@@ -97,6 +111,7 @@ def poll_session(
     jwt_token: str,
     now: datetime,
     record_loader: RecordLoader | None = None,
+    poll_settings: PollSettings | None = None,
 ) -> BingoSession:
     """Poll all campaign tracks once and apply the resulting bingo transition."""
 
@@ -104,7 +119,15 @@ def poll_session(
         return session
 
     loader = record_loader or _live_record_loader
-    records = tuple(loader(track, jwt_token) for track in session.tracks)
+    settings = poll_settings or PollSettings()
+    if settings.request_delay < 0:
+        raise ValueError("The leaderboard request delay cannot be negative.")
+    sleeper = settings.sleep_fn or time.sleep
+    records = []
+    for index, track in enumerate(session.tracks):
+        if index:
+            sleeper(settings.request_delay)
+        records.append(loader(track, jwt_token))
     entries, seen_records = _new_entries(records, now, session.seen_records)
     return replace(
         session,
@@ -141,13 +164,20 @@ def poll_session_in_state(
     jwt_token: str,
     now: datetime,
     record_loader: RecordLoader | None = None,
+    poll_settings: PollSettings | None = None,
 ) -> BingoSession:
     """Poll the session held by Streamlit and store its updated snapshot."""
 
     session = session_state.get(SESSION_KEY)
     if not isinstance(session, BingoSession):
         raise TypeError("No active bingo session exists.")
-    updated = poll_session(session, jwt_token, now, record_loader)
+    updated = poll_session(
+        session,
+        jwt_token,
+        now,
+        record_loader,
+        poll_settings,
+    )
     session_state[SESSION_KEY] = updated
     return updated
 
