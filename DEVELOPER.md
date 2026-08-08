@@ -26,6 +26,12 @@ Tests mirror these boundaries in `tests/`. Streamlit rendering tests use a fake 
 6. Polling uses the process-wide `SHARED_POLLING_COORDINATOR`. Successful snapshots are cached for one minute by campaign, token audience, and loader; overlapping viewers single-flight the same refresh, while `poll_canonical_game` atomically applies record de-duplication and Bingo transitions to the canonical session.
 7. The coordinator reserves aggregate request start slots across viewers and accounts for request duration, keeping the configured 0.6-second minimum interval. Retryable 429 and 5xx failures use bounded exponential backoff, optionally honoring a numeric `Retry-After` header. Manual refresh bypasses the snapshot cache; automatic refresh remains one-minute gated.
 
+## Deployment and Lifecycle
+
+Deploy `streamlit_app.py` to Streamlit Cloud and provide `BASIC_AUTH` and `APP_PASSWORD_HASH` in the app's Secrets settings using TOML syntax. Optional identity settings may be supplied there as well. No external game-state store or storage credentials are required.
+
+The process-wide `SHARED_CANONICAL_GAME` store is the boundary for one game shared by every viewer connected to that running app process. Pending settings may be changed before start, the first successful start wins, and later starts cannot replace the session. Stop retains the final immutable snapshot for all viewers; reset removes the session and returns all viewers to the shared pending setup. A process restart creates a fresh in-memory store, so the next game begins with fresh configuration and current API data rather than restored state.
+
 ## State Ownership
 
 There are two deliberately different state scopes:
