@@ -1,0 +1,105 @@
+from datetime import UTC, datetime, timedelta
+
+import pytest
+
+from bingo import (
+    build_bingo_grid,
+    rank_track,
+    start_bingo,
+    stop_bingo,
+    update_bingo_state,
+)
+from player import PLAYERS
+from track import Track
+
+
+def make_tracks():
+    numbers = (1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 16, 17, 18, 19)
+    return [Track(f"Track {number}", f"uid-{number}", number) for number in numbers]
+
+
+def make_records(owner_by_number=None, missing_numbers=()):
+    owner_by_number = owner_by_number or {}
+    records = []
+    for number in (1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 16, 17, 18, 19):
+        if number in missing_numbers:
+            continue
+        track = Track(f"Track {number}", f"uid-{number}", number)
+        owner = owner_by_number.get(number, PLAYERS[1])
+        players = [
+            {"player": owner, "pb": 60_000},
+            {"player": PLAYERS[2], "pb": 61_000},
+        ]
+        records.append({"track": track, "players": players})
+    return records
+
+
+def test_grid_has_one_track_from_each_batch_in_each_row_and_column():
+    grid = build_bingo_grid(make_tracks())
+    assert len(grid) == 4
+    assert all(len(row) == 4 for row in grid)
+    batch = lambda number: (number - 1) // 5
+    assert all({batch(track.number) for track in row} == {0, 1, 2, 3} for row in grid)
+    assert all(
+        {batch(grid[row][column].number) for row in range(4)} == {0, 1, 2, 3}
+        for column in range(4)
+    )
+
+
+def test_grid_requires_sixteen_tracks():
+    with pytest.raises(ValueError, match="exactly 16"):
+        build_bingo_grid(make_tracks()[:-1])
+
+
+def test_ranking_handles_missing_times_and_ties():
+    track = Track("Track 1", "uid-1", 1)
+    ranking = rank_track(
+        track,
+        [{"player": PLAYERS[0], "pb": None}, {"player": PLAYERS[1], "pb": 60_000}],
+    )
+    assert ranking.owner is PLAYERS[1]
+    assert ranking.margin is None
+
+    tie = rank_track(
+        track,
+        [{"player": PLAYERS[0], "pb": 60_000}, {"player": PLAYERS[1], "pb": 60_000}],
+    )
+    assert tie.owner is None
+    assert tie.margin is None
+
+
+def test_ownership_and_timer_reset_when_line_owner_changes():
+    start = datetime(2026, 1, 1, tzinfo=UTC)
+    first = start_bingo(start)
+    first_update = update_bingo_state(
+        first, make_records(), start + timedelta(minutes=1)
+    )
+    assert first_update.timer_owner is PLAYERS[1]
+    assert first_update.timer_started_at == start + timedelta(minutes=1)
+
+    changed = update_bingo_state(
+        first_update,
+        make_records({1: PLAYERS[0], 2: PLAYERS[0], 3: PLAYERS[0], 4: PLAYERS[0]}),
+        start + timedelta(minutes=2),
+    )
+    assert changed.timer_owner is PLAYERS[0]
+    assert changed.timer_started_at == start + timedelta(minutes=2)
+
+
+def test_stable_line_completes_after_ten_minutes():
+    start = datetime(2026, 1, 1, tzinfo=UTC)
+    state = update_bingo_state(start_bingo(start), make_records(), start)
+    completed = update_bingo_state(state, make_records(), start + timedelta(minutes=10))
+    assert completed.status == "completed"
+    assert completed.winner is PLAYERS[1]
+
+
+def test_game_expires_after_five_hours_and_manual_stop_is_terminal():
+    start = datetime(2026, 1, 1, tzinfo=UTC)
+    expired = update_bingo_state(
+        start_bingo(start), make_records(), start + timedelta(hours=5)
+    )
+    assert expired.status == "expired"
+    stopped = stop_bingo(start_bingo(start))
+    assert stopped.status == "stopped"
+    assert stop_bingo(stopped) is stopped
