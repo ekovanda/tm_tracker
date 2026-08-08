@@ -17,3 +17,7 @@ All notable changes to this project are documented here.
 - Updated authentication to use Nadeo service accounts and documented Live API campaign and map endpoints.
 - Fixed the project packaging and type-check configuration so the normal pre-commit hooks can run without bypassing verification.
 - Fixed legacy lint findings in shared API and utility modules.
+
+### Changed
+
+- 2026-08-08T15:19:54Z: Updated the create-commit workflow to preserve changelog history and require timestamped entries. A commit ID is not applicable before the resulting commit exists.
