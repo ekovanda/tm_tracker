@@ -46,6 +46,10 @@ from utils import prettify_time
 
 CAMPAIGNS_KEY = "bingo_campaigns"
 BOARD_SEED_KEY = "bingo_setup_board_seed"
+SETUP_CAMPAIGN_KEY = "bingo_setup_campaign"
+SETUP_GAME_DURATION_KEY = "bingo_setup_game_duration"
+SETUP_GRACE_PERIOD_KEY = "bingo_setup_grace_period"
+SETUP_TIMER_DURATION_KEY = "bingo_setup_timer_duration"
 LAST_POLLED_KEY = "bingo_last_polled_at"
 POLL_INTERVAL = timedelta(minutes=1)
 TIMER_REFRESH_INTERVAL_SECONDS = 1
@@ -462,6 +466,26 @@ def _render_active_session() -> None:
     _render_active_session_content()
 
 
+def _configure_pending_from_widgets() -> None:
+    """Persist one viewer's committed setup-widget change canonically."""
+
+    selected_campaign = st.session_state.get(SETUP_CAMPAIGN_KEY)
+    campaign_id = getattr(selected_campaign, "campaign_id", selected_campaign)
+    if not isinstance(campaign_id, str):
+        return
+    canonical_store = get_canonical_game_store()
+    pending = canonical_store.get().pending
+    settings = BingoSettings(
+        game_duration=timedelta(hours=int(st.session_state[SETUP_GAME_DURATION_KEY])),
+        grace_period=timedelta(minutes=int(st.session_state[SETUP_GRACE_PERIOD_KEY])),
+        manual_timer_duration=timedelta(
+            minutes=int(st.session_state[SETUP_TIMER_DURATION_KEY])
+        ),
+        board_seed=pending.settings.board_seed,
+    )
+    canonical_store.configure(PendingGame(campaign_id, settings))
+
+
 def _render_session_settings(
     campaigns: list[Campaign],
 ) -> tuple[str, BingoSettings] | None:
@@ -478,11 +502,23 @@ def _render_session_settings(
         ),
         0,
     )
+    st.session_state[SETUP_CAMPAIGN_KEY] = campaigns[campaign_index]
+    st.session_state[SETUP_GAME_DURATION_KEY] = int(
+        pending.settings.game_duration.total_seconds() / 3600
+    )
+    st.session_state[SETUP_GRACE_PERIOD_KEY] = int(
+        pending.settings.grace_period.total_seconds() / 60
+    )
+    st.session_state[SETUP_TIMER_DURATION_KEY] = int(
+        pending.settings.manual_timer_duration.total_seconds() / 60
+    )
     campaign = st.selectbox(
         "Official campaign",
         campaigns,
         format_func=lambda item: item.name,
         index=campaign_index,
+        key=SETUP_CAMPAIGN_KEY,
+        on_change=_configure_pending_from_widgets,
     )
     board_seed = pending.settings.board_seed
     _render_setup_board(board_seed)
@@ -507,23 +543,26 @@ def _render_session_settings(
             "Maximum game length (hours)",
             min_value=1,
             max_value=24,
-            value=int(pending.settings.game_duration.total_seconds() / 3600),
+            key=SETUP_GAME_DURATION_KEY,
             step=1,
+            on_change=_configure_pending_from_widgets,
         )
     )
     grace_period_minutes = st.number_input(
         "Grace period (minutes)",
         min_value=0,
         max_value=game_duration_hours * 60,
-        value=int(pending.settings.grace_period.total_seconds() / 60),
+        key=SETUP_GRACE_PERIOD_KEY,
         step=5,
+        on_change=_configure_pending_from_widgets,
     )
     timer_duration_minutes = st.number_input(
         "Player timer duration (minutes)",
         min_value=1,
         max_value=60,
-        value=int(pending.settings.manual_timer_duration.total_seconds() / 60),
+        key=SETUP_TIMER_DURATION_KEY,
         step=1,
+        on_change=_configure_pending_from_widgets,
     )
     start_clicked = st.button(
         "Start bingo",
@@ -538,7 +577,6 @@ def _render_session_settings(
         manual_timer_duration=timedelta(minutes=timer_duration_minutes),
         board_seed=board_seed,
     )
-    canonical_store.configure(PendingGame(campaign.campaign_id, settings))
     if not start_clicked:
         return None
     return campaign.campaign_id, settings

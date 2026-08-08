@@ -17,6 +17,7 @@ All notable changes to this project are documented here.
 
 ### Fixed
 
+- 2026-08-08T20:32:08+02:00: Fixed setup number inputs reverting or requiring repeated clicks by synchronizing committed widget changes with the shared pending Bingo configuration. A commit ID is not applicable before the resulting commit exists.
 - 2026-08-08T19:19:22+02:00: Fixed active Bingo cells to use neutral grey for unclaimed tracks and the current player's color for claimed tracks (`d354751`).
 - 2026-08-08T19:08:41+02:00: Translated Live API HTTP, transport, JSON, and payload failures into actionable errors while preserving status and retryability metadata (`c91b4ea`).
 - 2026-08-08T19:04:00+02:00: Added service-token expiry tracking, refresh-before-expiry, and one-time recovery after an expired Live API authorization (`9ba8f28`).

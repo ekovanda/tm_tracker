@@ -241,11 +241,31 @@ class FakeStreamlit:
         pass
 
     def selectbox(self, label, options, **kwargs):
-        return self.selectbox_values.get(label, options[kwargs.get("index", 0)])
+        key = kwargs.get("key")
+        previous = self.session_state.get(key) if key else None
+        value = self.selectbox_values.get(
+            label,
+            self.session_state.get(key, options[kwargs.get("index", 0)]),
+        )
+        if key:
+            self.session_state[key] = value
+        if value != previous and kwargs.get("on_change"):
+            kwargs["on_change"]()
+        return value
 
     def number_input(self, label, **kwargs):
         self.number_input_calls.append((label, kwargs))
-        return self.number_input_values.get(label, kwargs["value"])
+        key = kwargs.get("key")
+        previous = self.session_state.get(key) if key else None
+        value = self.number_input_values.get(
+            label,
+            self.session_state.get(key, kwargs.get("value")),
+        )
+        if key:
+            self.session_state[key] = value
+        if value != previous and kwargs.get("on_change"):
+            kwargs["on_change"]()
+        return value
 
     def button(self, *_args, **_kwargs):
         self.button_calls.append((_args[0], _kwargs))
@@ -299,9 +319,9 @@ def test_setup_and_board_rendering_use_streamlit_controls():
     ]
     for _label, kwargs in fake_st.number_input_calls:
         assert all(
-            isinstance(kwargs[name], int)
-            for name in ("min_value", "max_value", "value", "step")
+            isinstance(kwargs[name], int) for name in ("min_value", "max_value", "step")
         )
+        assert isinstance(kwargs["key"], str)
     assert [label for label, _kwargs in fake_st.button_calls] == [
         "Shuffle board",
         "Start bingo",
@@ -546,9 +566,9 @@ def test_setup_configuration_is_shared_between_viewers():
         grace_period=timedelta(minutes=20),
         manual_timer_duration=timedelta(minutes=7),
     )
-    assert second_st.number_input_calls[0][1]["value"] == 3
-    assert second_st.number_input_calls[1][1]["value"] == 20
-    assert second_st.number_input_calls[2][1]["value"] == 7
+    assert second_st.session_state[bingo_page_module.SETUP_GAME_DURATION_KEY] == 3
+    assert second_st.session_state[bingo_page_module.SETUP_GRACE_PERIOD_KEY] == 20
+    assert second_st.session_state[bingo_page_module.SETUP_TIMER_DURATION_KEY] == 7
 
 
 def test_stop_and_reset_controls_delegate_to_service():
