@@ -53,7 +53,7 @@ The pure functions in `bingo.py` return new frozen state values rather than muta
 - Nadeo requests use the service-account token path currently used by the app and include a useful identifying `User-Agent`.
 - Authentication and Live Services credentials come from environment variables loaded by `python-dotenv`; never add credentials to source or documentation.
 - Campaign loading uses the official campaign endpoint, then retrieves map metadata and selects the 16 playable track numbers.
-- Leaderboard requests are paced with `REQUEST_DELAY_SECONDS` (currently 0.5 seconds) and accept an injected `SleepFn` in tests.
+- Leaderboard requests are paced with `REQUEST_DELAY_SECONDS` (currently 0.6 seconds), keeping the theoretical maximum below `MAX_REQUESTS_PER_SECOND` (2). The sleep function is injected in tests, which record each request start time and calculate the observed rate.
 - The UI refresh interval and network poll interval are intentionally separate: one-second rendering must not become one-second API traffic.
 - Session settings are passed into `start_bingo` and retained in `BingoState`; the pre-session configuration UI is separate from the domain enforcement. The board seed is persisted with the session settings.
 

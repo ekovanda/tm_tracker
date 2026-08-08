@@ -1,9 +1,11 @@
 from datetime import UTC, datetime, timedelta
+from itertools import pairwise
 
 import pytest
 
 from bingo import BingoSettings
 from bingo_service import (
+    MAX_REQUESTS_PER_SECOND,
     REQUEST_DELAY_SECONDS,
     SESSION_KEY,
     BingoSession,
@@ -138,6 +140,36 @@ def test_poll_paces_requests_in_track_order_with_configured_delay():
     assert delays == [REQUEST_DELAY_SECONDS] * (len(session.tracks) - 1)
 
 
+def test_poll_stays_below_two_requests_per_second():
+    session = start_session("campaign", "jwt", START, make_loader())
+    clock = [0.0]
+    request_times = []
+
+    def advance(delay):
+        clock[0] += delay
+
+    def load(track, _jwt_token):
+        request_times.append(clock[0])
+        return make_record_loader()(track, _jwt_token)
+
+    poll_session(
+        session,
+        "jwt",
+        START,
+        load,
+        PollSettings(REQUEST_DELAY_SECONDS, advance),
+    )
+
+    intervals = [current - previous for previous, current in pairwise(request_times)]
+    observed_rate = max(1 / interval for interval in intervals)
+
+    assert len(request_times) == len(session.tracks)
+    assert all(
+        interval == pytest.approx(REQUEST_DELAY_SECONDS) for interval in intervals
+    )
+    assert observed_rate < MAX_REQUESTS_PER_SECOND
+
+
 def test_poll_rejects_negative_request_delay():
     session = start_session("campaign", "jwt", START, make_loader())
 
@@ -147,6 +179,18 @@ def test_poll_rejects_negative_request_delay():
             "jwt",
             START,
             poll_settings=PollSettings(-0.1, no_sleep),
+        )
+
+
+def test_poll_rejects_request_delay_below_safe_minimum():
+    session = start_session("campaign", "jwt", START, make_loader())
+
+    with pytest.raises(ValueError, match="cannot be less than"):
+        poll_session(
+            session,
+            "jwt",
+            START,
+            poll_settings=PollSettings(REQUEST_DELAY_SECONDS - 0.1, no_sleep),
         )
 
 

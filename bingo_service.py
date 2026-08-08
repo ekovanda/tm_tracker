@@ -25,7 +25,8 @@ from tm_lookups import CLUBS
 from track import Track
 
 SESSION_KEY = "bingo_session"
-REQUEST_DELAY_SECONDS = 0.5
+MAX_REQUESTS_PER_SECOND = 2
+REQUEST_DELAY_SECONDS = 0.6
 ProcessedRecord = dict
 TrackLoader = Callable[[str, str], list[Track]]
 RecordLoader = Callable[[Track, str], ProcessedRecord]
@@ -206,6 +207,11 @@ def poll_session(
     settings = poll_settings or PollSettings()
     if settings.request_delay < 0:
         raise ValueError("The leaderboard request delay cannot be negative.")
+    if settings.request_delay < REQUEST_DELAY_SECONDS:
+        raise ValueError(
+            f"The leaderboard request delay cannot be less than "
+            f"{REQUEST_DELAY_SECONDS} seconds."
+        )
     sleeper = settings.sleep_fn or time.sleep
     records = []
     for index, track in enumerate(session.tracks):
