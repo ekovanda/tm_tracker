@@ -16,6 +16,7 @@ from streamlit_bingo_page import (
     display_margin,
     manual_timer_progress,
     owner_color,
+    owner_text_color,
     poll_is_due,
     timer_color,
 )
@@ -37,8 +38,15 @@ def test_timer_refreshes_every_second_without_shortening_poll_window():
 
 
 def test_board_display_helpers_format_owner_margin_and_deadline():
-    assert owner_color(PLAYERS[0]) == "#d95f59"
+    assert [owner_color(player) for player in PLAYERS] == [
+        "#16a34a",
+        "#eab308",
+        "#3b82f6",
+    ]
     assert owner_color(None) == "#6b7280"
+    assert owner_text_color(PLAYERS[1]) == "#111827"
+    assert owner_text_color(PLAYERS[0]) == "#ffffff"
+    assert owner_text_color(None) == "#ffffff"
     assert display_margin(1_250) == "+00:01.250"
     assert display_margin(None) == "No margin"
     expected = (datetime(2026, 1, 1, tzinfo=UTC) + timedelta(hours=5)).astimezone()

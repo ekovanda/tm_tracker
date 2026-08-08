@@ -57,7 +57,7 @@ The pure functions in `bingo.py` return new frozen state values rather than muta
 
 - The page uses Streamlit's `layout="wide"` so the three timer cards have useful horizontal space.
 - Timer action labels are intentionally short (`Start`, `Restart`, and `Stop`); the player heading and stable account-based widget keys provide identity without wrapping long labels.
-- Timer colors are currently Eljay green, Lry yellow, and Timo blue. Board and record ownership colors are still maintained by the separate `OWNER_COLORS` mapping; the remaining palette reconciliation is tracked as implementation-plan step 13.
+- Timer, board, and record ownership colors are Eljay green, Lry yellow, and Timo blue. Yellow board cells use dark text to preserve readable contrast.
 - Timer progress is rendered as an accessible HTML progressbar with a remaining fraction and player-specific color.
 - Streamlit fragment execution is used when the runtime is available. The page has a direct content fallback so rendering helpers remain testable without a live Streamlit runtime.
 

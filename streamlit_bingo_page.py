@@ -35,10 +35,11 @@ TIMER_PLAYER_COLORS = {
     PLAYERS[2].account_id: "#3b82f6",
 }
 OWNER_COLORS = {
-    PLAYERS[0].account_id: "#d95f59",
-    PLAYERS[1].account_id: "#3b82f6",
-    PLAYERS[2].account_id: "#16a34a",
+    PLAYERS[0].account_id: "#16a34a",
+    PLAYERS[1].account_id: "#eab308",
+    PLAYERS[2].account_id: "#3b82f6",
 }
+OWNER_TEXT_COLORS = {PLAYERS[1].account_id: "#111827"}
 
 
 def poll_is_due(last_polled_at: datetime | None, now: datetime) -> bool:
@@ -51,6 +52,12 @@ def owner_color(owner: Player | None) -> str:
     """Return the board color for a configured owner or the neutral color."""
 
     return OWNER_COLORS.get(owner.account_id, "#6b7280") if owner else "#6b7280"
+
+
+def owner_text_color(owner: Player | None) -> str:
+    """Return readable text color for a board cell owner."""
+
+    return OWNER_TEXT_COLORS.get(owner.account_id, "#ffffff") if owner else "#ffffff"
 
 
 def display_margin(margin: int | None) -> str:
@@ -116,9 +123,10 @@ def _render_cell(ranking) -> None:
     owner = ranking.owner
     owner_name = owner.alias if owner else "Unclaimed"
     color = owner_color(owner)
+    text_color = owner_text_color(owner)
     st.markdown(
         f"""
-        <div style="background: {color}; border-radius: 6px; color: #ffffff;
+        <div style="background: {color}; border-radius: 6px; color: {text_color};
                     min-height: 96px; padding: 10px; margin-bottom: 8px;
                     box-sizing: border-box;">
             <div style="font-size: 1.35rem; font-weight: 700;">{ranking.track.number:02d}</div>
