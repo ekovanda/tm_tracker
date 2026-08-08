@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import streamlit_bingo_page as bingo_page_module
 from bingo import BingoState, TrackRanking
-from bingo_service import BingoSession
+from bingo_service import BingoSession, RecordEntry
 from player import PLAYERS
 from streamlit_bingo_page import (
     _render_board,
@@ -48,6 +48,8 @@ class FakeStreamlit:
     def __init__(self, button_results=None):
         self.session_state = {"nadeo_jwt_token": {"accessToken": "jwt"}}
         self.markdown_calls = []
+        self.caption_calls = []
+        self.info_calls = []
         self.button_results = button_results or {}
 
     def columns(self, count):
@@ -69,13 +71,13 @@ class FakeStreamlit:
         return self.button_results.get(_args[0], False)
 
     def info(self, *_args, **_kwargs):
-        pass
+        self.info_calls.append(_args[0])
 
     def warning(self, *_args, **_kwargs):
         pass
 
     def caption(self, *_args, **_kwargs):
-        pass
+        self.caption_calls.append(_args[0])
 
     def metric(self, *_args, **_kwargs):
         pass
@@ -110,6 +112,8 @@ def test_setup_and_board_rendering_use_streamlit_controls():
         _render_board(session)
 
     assert len(fake_st.markdown_calls) == 2
+    assert f"background: {owner_color(PLAYERS[0])}" in fake_st.markdown_calls[0]
+    assert "Track 1" not in fake_st.markdown_calls[0]
 
 
 def test_active_session_refreshes_and_displays_status():
@@ -136,6 +140,57 @@ def test_active_session_refreshes_and_displays_status():
         bingo_page()
 
     poll.assert_called_once()
+
+
+def test_records_view_renders_newest_records_first():
+    fake_st = FakeStreamlit()
+    first_track = Track("Track 1", "uid-1", 1)
+    second_track = Track("Track 2", "uid-2", 2)
+    first_time = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
+    second_time = datetime(2026, 1, 1, 12, 1, tzinfo=UTC)
+    session = BingoSession(
+        "campaign",
+        (first_track, second_track),
+        BingoState(first_time),
+        records=(
+            RecordEntry(first_time, first_track, PLAYERS[0], 60_000),
+            RecordEntry(second_time, second_track, PLAYERS[1], 61_250),
+        ),
+    )
+
+    with patch.object(bingo_page_module, "st", fake_st):
+        bingo_page_module._render_records(session)
+
+    player_rows = [call for call in fake_st.markdown_calls if "<span" in call]
+    assert player_rows[0].endswith(PLAYERS[1].alias)
+    assert player_rows[1].endswith(PLAYERS[0].alias)
+    assert owner_color(PLAYERS[0]) in player_rows[1]
+    assert owner_color(PLAYERS[1]) in player_rows[0]
+    assert fake_st.caption_calls[:4] == ["Observed", "Player", "Track", "Time"]
+    assert fake_st.caption_calls[4:] == [
+        second_time.astimezone().strftime("%Y-%m-%d %H:%M:%S"),
+        "Track 2",
+        first_time.astimezone().strftime("%Y-%m-%d %H:%M:%S"),
+        "Track 1",
+    ]
+    assert "Track 1: Track 1" not in "".join(fake_st.markdown_calls)
+    assert "Track 2: Track 2" not in "".join(fake_st.markdown_calls)
+    time_rows = [call for call in fake_st.markdown_calls if call.startswith("**")]
+    assert time_rows == ["**01:01.250**", "**01:00.000**"]
+
+
+def test_records_view_handles_empty_log():
+    fake_st = FakeStreamlit()
+    session = BingoSession(
+        "campaign",
+        (),
+        BingoState(datetime(2026, 1, 1, tzinfo=UTC)),
+    )
+
+    with patch.object(bingo_page_module, "st", fake_st):
+        bingo_page_module._render_records(session)
+
+    assert fake_st.info_calls == ["No new records observed yet."]
 
 
 def test_start_stop_and_reset_controls_delegate_to_service():

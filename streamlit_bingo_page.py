@@ -65,15 +65,15 @@ def _campaigns() -> list[Campaign]:
 def _render_cell(ranking) -> None:
     owner = ranking.owner
     owner_name = owner.alias if owner else "Unclaimed"
-    track_name = escape(ranking.track.name)
+    color = owner_color(owner)
     st.markdown(
         f"""
-        <div style="border: 2px solid {owner_color(owner)}; border-radius: 6px;
-                    min-height: 116px; padding: 12px; margin-bottom: 12px;">
-            <div style="font-size: 0.78rem; color: #6b7280;">Track {ranking.track.number}</div>
-            <strong>{track_name}</strong>
-            <div style="color: {owner_color(owner)}; margin-top: 8px;">{escape(owner_name)}</div>
-            <div style="font-size: 0.82rem; margin-top: 4px;">{display_margin(ranking.margin)}</div>
+        <div style="background: {color}; border-radius: 6px; color: #ffffff;
+                    min-height: 96px; padding: 10px; margin-bottom: 8px;
+                    box-sizing: border-box;">
+            <div style="font-size: 1.35rem; font-weight: 700;">{ranking.track.number:02d}</div>
+            <div style="margin-top: 5px;">{escape(owner_name)}</div>
+            <div style="font-size: 0.82rem; margin-top: 3px;">{display_margin(ranking.margin)}</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -87,6 +87,57 @@ def _render_board(session: BingoSession) -> None:
         for column, ranking in zip(columns, row):
             with column:
                 _render_cell(ranking)
+
+
+def _render_records(session: BingoSession) -> None:
+    st.subheader("New records")
+    if not session.records:
+        st.info("No new records observed yet.")
+        return
+
+    header_columns = st.columns(4)
+    for column, label in zip(header_columns, ("Observed", "Player", "Track", "Time")):
+        with column:
+            st.caption(label)
+
+    for entry in reversed(session.records):
+        observed_at = entry.observed_at.astimezone().strftime("%Y-%m-%d %H:%M:%S")
+        color = owner_color(entry.player)
+        columns = st.columns(4)
+        with columns[0]:
+            st.caption(observed_at)
+        with columns[1]:
+            st.markdown(
+                f'<span style="display:inline-block; width:0.65rem; height:0.65rem; '
+                f'border-radius:50%; background:{color}; margin-right:0.4rem;"></span>'
+                f"{escape(entry.player.alias)}",
+                unsafe_allow_html=True,
+            )
+        with columns[2]:
+            st.caption(f"Track {entry.track.number}")
+        with columns[3]:
+            st.markdown(f"**{prettify_time(entry.time)}**")
+
+
+def _render_session_metrics(session: BingoSession, now: datetime) -> None:
+    last_polled_at = st.session_state.get(LAST_POLLED_KEY)
+    current_time = now.astimezone().strftime("%H:%M:%S")
+    last_refresh = (
+        last_polled_at.astimezone().strftime("%H:%M:%S")
+        if isinstance(last_polled_at, datetime)
+        else "Not yet"
+    )
+    status = session.state.status.capitalize()
+    if session.state.winner:
+        status = f"{status}: {session.state.winner.alias} wins"
+
+    status_column, current_column, refresh_column = st.columns(3)
+    with status_column:
+        st.metric("Game status", status)
+    with current_column:
+        st.metric("Current time", current_time)
+    with refresh_column:
+        st.metric("Last refresh", last_refresh)
 
 
 def bingo_page() -> None:
@@ -143,12 +194,6 @@ def bingo_page() -> None:
             )
         st.session_state[LAST_POLLED_KEY] = now
 
-    current_time = now.astimezone().strftime("%H:%M:%S")
-    st.caption(f"Current time: {current_time}")
-    st.caption(f"Last refresh: {current_time}")
-    st.caption(f"Deadline: {display_deadline(active_session.state.started_at)}")
-    status = active_session.state.status.capitalize()
-    if active_session.state.winner:
-        status = f"{status}: {active_session.state.winner.alias} wins"
-    st.metric("Game status", status)
+    _render_session_metrics(active_session, now)
     _render_board(active_session)
+    _render_records(active_session)
