@@ -11,8 +11,10 @@ from bingo import (
     GAME_DURATION,
     GRACE_PERIOD,
     MANUAL_TIMER_DURATION,
+    PLAYABLE_TRACK_NUMBERS,
     BingoSettings,
     ManualTimerState,
+    build_bingo_grid,
     grace_period_active,
     manual_timer_remaining,
 )
@@ -31,9 +33,11 @@ from bingo_service import (
 )
 from live_services import Campaign, get_official_campaigns
 from player import PLAYERS, Player
+from track import Track
 from utils import prettify_time
 
 CAMPAIGNS_KEY = "bingo_campaigns"
+BOARD_SEED_KEY = "bingo_setup_board_seed"
 LAST_POLLED_KEY = "bingo_last_polled_at"
 POLL_INTERVAL = timedelta(minutes=1)
 TIMER_REFRESH_INTERVAL_SECONDS = 1
@@ -48,6 +52,12 @@ OWNER_COLORS = {
     PLAYERS[2].account_id: "#3b82f6",
 }
 OWNER_TEXT_COLORS = {PLAYERS[1].account_id: "#111827"}
+TRACK_COLORS = {
+    0: ("#d1d5db", "#111827"),
+    1: ("#86efac", "#111827"),
+    2: ("#93c5fd", "#111827"),
+    3: ("#fca5a5", "#111827"),
+}
 
 
 def poll_is_due(last_polled_at: datetime | None, now: datetime) -> bool:
@@ -66,6 +76,12 @@ def owner_text_color(owner: Player | None) -> str:
     """Return readable text color for a board cell owner."""
 
     return OWNER_TEXT_COLORS.get(owner.account_id, "#ffffff") if owner else "#ffffff"
+
+
+def track_colors(track_number: int) -> tuple[str, str]:
+    """Return the background and readable text colors for a track series."""
+
+    return TRACK_COLORS[(track_number - 1) // 5]
 
 
 def display_margin(margin: int | None) -> str:
@@ -150,8 +166,7 @@ def _campaigns() -> list[Campaign]:
 def _render_cell(ranking) -> None:
     owner = ranking.owner
     owner_name = owner.alias if owner else "Unclaimed"
-    color = owner_color(owner)
-    text_color = owner_text_color(owner)
+    color, text_color = track_colors(ranking.track.number)
     st.markdown(
         f"""
         <div style="background: {color}; border-radius: 6px; color: {text_color};
@@ -173,6 +188,31 @@ def _render_board(session: BingoSession) -> None:
         for column, ranking in zip(columns, row):
             with column:
                 _render_cell(ranking)
+
+
+def _render_setup_board(board_seed: int) -> None:
+    """Render the numbered board preview used before a session starts."""
+
+    tracks = [
+        Track(f"Track {number}", f"preview-{number}", number)
+        for number in PLAYABLE_TRACK_NUMBERS
+    ]
+    preview = build_bingo_grid(tracks, board_seed)
+    st.caption("Board preview")
+    for row in preview:
+        columns = st.columns(4)
+        for column, track in zip(columns, row):
+            if track.number is None:
+                continue
+            color, text_color = track_colors(track.number)
+            with column:
+                st.markdown(
+                    f'<div style="background:{color}; color:{text_color}; '
+                    "border-radius:6px; padding:18px 10px; margin-bottom:8px; "
+                    'text-align:center; font-size:1.35rem; font-weight:700;">'
+                    f"{track.number:02d}</div>",
+                    unsafe_allow_html=True,
+                )
 
 
 def _render_records(session: BingoSession) -> None:
@@ -378,6 +418,18 @@ def _render_session_settings(
         format_func=lambda item: item.name,
         key="bingo_setup_campaign",
     )
+    board_seed = int(st.session_state.get(BOARD_SEED_KEY, 0))
+    _render_setup_board(board_seed)
+    shuffle_clicked = st.button(
+        "Shuffle board",
+        type="secondary",
+        icon=":material/shuffle:",
+        use_container_width=True,
+        key="bingo_setup_shuffle",
+    )
+    if shuffle_clicked:
+        st.session_state[BOARD_SEED_KEY] = board_seed + 1
+        st.rerun()
     game_duration_hours = int(
         st.number_input(
             "Maximum game length (hours)",
@@ -417,6 +469,7 @@ def _render_session_settings(
         game_duration=timedelta(hours=game_duration_hours),
         grace_period=timedelta(minutes=grace_period_minutes),
         manual_timer_duration=timedelta(minutes=timer_duration_minutes),
+        board_seed=board_seed,
     )
 
 

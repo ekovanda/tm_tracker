@@ -3,6 +3,7 @@
 from collections.abc import Iterable
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
+from random import Random
 
 from player import PLAYERS, Player
 from track import Track
@@ -35,6 +36,7 @@ class BingoSettings:
     game_duration: timedelta = GAME_DURATION
     grace_period: timedelta = GRACE_PERIOD
     manual_timer_duration: timedelta = MANUAL_TIMER_DURATION
+    board_seed: int = 0
 
 
 @dataclass(frozen=True)
@@ -57,8 +59,10 @@ class ManualTimerState:
     duration: timedelta = MANUAL_TIMER_DURATION
 
 
-def build_bingo_grid(tracks: Iterable[Track]) -> tuple[tuple[Track, ...], ...]:
-    """Arrange the four campaign series evenly across a unique 4x4 grid."""
+def build_bingo_grid(
+    tracks: Iterable[Track], board_seed: int = 0
+) -> tuple[tuple[Track, ...], ...]:
+    """Arrange the four campaign series evenly across a seeded 4x4 grid."""
 
     ordered_tracks = list(tracks)
     track_numbers = [track.number for track in ordered_tracks]
@@ -69,17 +73,24 @@ def build_bingo_grid(tracks: Iterable[Track]) -> tuple[tuple[Track, ...], ...]:
 
     batches: dict[int, list[Track]] = {index: [] for index in range(4)}
     for track in ordered_tracks:
-        if track.number is None:
+        track_number = track.number
+        if track_number is None:
             raise ValueError("The bingo grid requires numbered tracks.")
-        batch = (track.number - 1) // 5
-        batches[batch].append(track)
+        series = (track_number - 1) // 5
+        batches[series].append(track)
 
-    return tuple(
+    if board_seed:
+        randomizer = Random(board_seed)
+        for tracks_in_series in batches.values():
+            randomizer.shuffle(tracks_in_series)
+
+    grid = tuple(
         tuple(
             batches[(row + column) % 4][(row + 2 * column) % 4] for column in range(4)
         )
         for row in range(4)
     )
+    return grid
 
 
 def rank_track(
@@ -242,7 +253,7 @@ def update_bingo_state(
         else Track(str(number), str(number), number=number)
         for number in PLAYABLE_TRACK_NUMBERS
     ]
-    grid_tracks = build_bingo_grid(tracks)
+    grid_tracks = build_bingo_grid(tracks, state.settings.board_seed)
     board = tuple(
         tuple(
             rankings.get(track.number, TrackRanking(track, (), None, None))

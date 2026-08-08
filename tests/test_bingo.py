@@ -74,6 +74,42 @@ def test_grid_has_unique_playable_tracks_and_expected_arrangement():
     ]
 
 
+@pytest.mark.parametrize("board_seed", (0, 1, 2))
+def test_each_board_seed_is_deterministic_and_balanced(board_seed):
+    first = build_bingo_grid(make_tracks(), board_seed)
+    second = build_bingo_grid(make_tracks(), board_seed)
+
+    assert [[track.number for track in row] for row in first] == [
+        [track.number for track in row] for row in second
+    ]
+    numbers = [track.number for row in first for track in row]
+    assert len(numbers) == len(set(numbers)) == 16
+    assert all(
+        {(track.number - 1) // 5 for track in row} == {0, 1, 2, 3} for row in first
+    )
+    assert all(
+        {(first[row][column].number - 1) // 5 for row in range(4)} == {0, 1, 2, 3}
+        for column in range(4)
+    )
+
+
+def test_state_transition_uses_persisted_board_seed():
+    start = datetime(2026, 1, 1, tzinfo=UTC)
+    state = start_bingo(
+        start,
+        BingoSettings(grace_period=timedelta(), board_seed=1),
+    )
+
+    updated = update_bingo_state(state, make_records(), start)
+
+    assert [[ranking.track.number for ranking in row] for row in updated.board] == [
+        [4, 6, 11, 16],
+        [7, 14, 19, 2],
+        [12, 18, 3, 9],
+        [17, 1, 8, 13],
+    ]
+
+
 def test_grid_requires_sixteen_tracks():
     with pytest.raises(ValueError, match="exactly 16"):
         build_bingo_grid(make_tracks()[:-1])

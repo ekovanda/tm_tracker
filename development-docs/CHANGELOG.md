@@ -20,6 +20,8 @@ All notable changes to this project are documented here.
 
 ### Changed
 
+- 2026-08-08T16:35:29Z: Replaced named board layouts with a visible color-coded 4x4 preview and seeded shuffle control that preserves one track from each series in every row and column. A commit ID is not applicable before the resulting commit exists.
+- 2026-08-08T16:25:36Z: Added a color-coded pre-session 4x4 board preview and a `Shuffle board` control that creates a new valid seeded configuration. Every row and column contains one track from each of the four series. A commit ID is not applicable before the resulting commit exists.
 - 2026-08-08T16:20:05Z: Added pre-session controls for campaign and integer timing settings, a live grace-period countdown, and a neutral dark-grey grace progress bar. A commit ID is not applicable before the resulting commit exists.
 - 2026-08-08T16:02:34Z: Updated the planning workflow so an emptied sketchbook contains only its heading, with the convention documented for developers. A commit ID is not applicable before the resulting commit exists.
 - 2026-08-08T15:57:47Z: Reconciled player colors across timer, Bingo board, and record indicators, with readable dark text for yellow board cells. A commit ID is not applicable before the resulting commit exists.

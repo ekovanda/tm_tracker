@@ -66,7 +66,9 @@ def test_start_session_seeds_sixteen_tracks():
 
 def test_start_session_preserves_custom_timing_settings():
     settings = BingoSettings(
-        game_duration=timedelta(hours=2), grace_period=timedelta(minutes=15)
+        game_duration=timedelta(hours=2),
+        grace_period=timedelta(minutes=15),
+        board_seed=7,
     )
 
     session = start_session("campaign", "jwt", START, make_loader(), settings)

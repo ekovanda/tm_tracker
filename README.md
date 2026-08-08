@@ -46,7 +46,7 @@ The application also accepts optional `PROJECT_NAME`, `MAINTAINER_HANDLE`, and `
 uv run --active streamlit run streamlit_app.py
 ```
 
-Open the local URL printed by Streamlit. The pre-session settings page lets you choose an official campaign, player timer duration, grace period, and maximum game length. Once started, the settings page is replaced by the board, session status, records, leaderboard refresh status, and three player timers. During the grace period, a live seconds countdown and progress bar appear above the player timers.
+Open the local URL printed by Streamlit. The pre-session settings page shows a color-coded 4x4 board preview with track values. Use `Shuffle board` to create another valid board before choosing the player timer duration, grace period, and maximum game length and starting. Every row and column contains one light-grey, green, blue, and red track. Once started, the settings page is replaced by the live board, session status, records, leaderboard refresh status, and three player timers.
 
 ## Development Checks
 

@@ -3,7 +3,12 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import streamlit_bingo_page as bingo_page_module
-from bingo import BingoSettings, BingoState, ManualTimerState, TrackRanking
+from bingo import (
+    BingoSettings,
+    BingoState,
+    ManualTimerState,
+    TrackRanking,
+)
 from bingo_service import BingoSession, RecordEntry
 from player import PLAYERS
 from streamlit_bingo_page import (
@@ -21,6 +26,7 @@ from streamlit_bingo_page import (
     owner_text_color,
     poll_is_due,
     timer_color,
+    track_colors,
 )
 from track import Track
 
@@ -157,7 +163,9 @@ class FakeColumn:
 
 # pylint: disable=too-many-instance-attributes
 class FakeStreamlit:
-    def __init__(self, button_results=None, number_input_values=None):
+    def __init__(
+        self, button_results=None, number_input_values=None, selectbox_values=None
+    ):
         self.session_state = {"nadeo_jwt_token": {"accessToken": "jwt"}}
         self.markdown_calls = []
         self.caption_calls = []
@@ -167,6 +175,7 @@ class FakeStreamlit:
         self.number_input_calls = []
         self.button_results = button_results or {}
         self.number_input_values = number_input_values or {}
+        self.selectbox_values = selectbox_values or {}
 
     def columns(self, count):
         return [FakeColumn() for _ in range(count)]
@@ -183,8 +192,8 @@ class FakeStreamlit:
     def subheader(self, *_args, **_kwargs):
         pass
 
-    def selectbox(self, _label, options, **_kwargs):
-        return options[0]
+    def selectbox(self, label, options, **kwargs):
+        return self.selectbox_values.get(label, options[kwargs.get("index", 0)])
 
     def number_input(self, label, **kwargs):
         self.number_input_calls.append((label, kwargs))
@@ -245,10 +254,22 @@ def test_setup_and_board_rendering_use_streamlit_controls():
             isinstance(kwargs[name], int)
             for name in ("min_value", "max_value", "value", "step")
         )
-    assert [label for label, _kwargs in fake_st.button_calls] == ["Start bingo"]
-    assert len(fake_st.markdown_calls) == 2
-    assert f"background: {owner_color(PLAYERS[0])}" in fake_st.markdown_calls[0]
+    assert [label for label, _kwargs in fake_st.button_calls] == [
+        "Shuffle board",
+        "Start bingo",
+    ]
+    assert len(fake_st.markdown_calls) == 18
+    assert "background:#d1d5db" in fake_st.markdown_calls[0]
     assert "Track 1" not in fake_st.markdown_calls[0]
+
+
+def test_track_colors_follow_four_campaign_series():
+    assert [track_colors(number) for number in (1, 6, 11, 16)] == [
+        ("#d1d5db", "#111827"),
+        ("#86efac", "#111827"),
+        ("#93c5fd", "#111827"),
+        ("#fca5a5", "#111827"),
+    ]
 
 
 def test_active_session_refreshes_and_displays_status():
@@ -419,6 +440,29 @@ def test_start_stop_and_reset_controls_delegate_to_service():
     assert start.call_args.kwargs["settings"].manual_timer_duration == timedelta(
         minutes=7
     )
+    assert start.call_args.kwargs["settings"].board_seed == 0
+
+
+def test_shuffle_button_changes_and_persists_board_seed():
+    fake_st = FakeStreamlit({"Shuffle board": True})
+    campaigns = [SimpleNamespace(campaign_id="campaign", name="Summer")]
+
+    with patch.object(bingo_page_module, "st", fake_st):
+        # pylint: disable=protected-access
+        result = bingo_page_module._render_session_settings(campaigns)
+
+    assert result is None
+    assert fake_st.session_state[bingo_page_module.BOARD_SEED_KEY] == 1
+
+
+def test_stop_and_reset_controls_delegate_to_service():
+    track = Track("Track 1", "uid-1", 1)
+    session = BingoSession(
+        "campaign",
+        (track,),
+        BingoState(datetime(2026, 1, 1, tzinfo=UTC)),
+    )
+    campaign = [SimpleNamespace(campaign_id="campaign", name="Summer")]
 
     stop_st = FakeStreamlit({"Stop bingo": True})
     stop_st.session_state["bingo_session"] = session
