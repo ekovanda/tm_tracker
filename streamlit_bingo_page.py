@@ -1,10 +1,8 @@
 """Streamlit setup and live board for the Trackmania bingo game."""
 
-from collections.abc import MutableMapping
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from html import escape
-from typing import cast
 
 import requests
 import streamlit as st
@@ -30,7 +28,7 @@ from bingo_service import (
     PollSettings,
     get_canonical_game_store,
     get_manual_timers,
-    poll_session_in_state,
+    poll_canonical_game,
     reset_canonical_game,
     reset_manual_timers,
     restart_manual_timer_for_player,
@@ -191,10 +189,6 @@ def _run_live_request(operation, now: datetime):
         if status_code != 401:
             raise
         return operation(_refresh_access_token())
-
-
-def _typed_session_state() -> MutableMapping[str, object]:
-    return cast(MutableMapping[str, object], st.session_state)
 
 
 def _sync_canonical_session_to_state() -> BingoSession | None:
@@ -437,15 +431,17 @@ def _render_active_session_content() -> None:
     last_polled_at = st.session_state.get(LAST_POLLED_KEY)
     if refresh_clicked or poll_is_due(last_polled_at, now):
         with st.spinner("Refreshing rankings..."):
-            active_session = _run_live_request(
-                lambda token: poll_session_in_state(
-                    _typed_session_state(),
+            canonical_state = _run_live_request(
+                lambda token: poll_canonical_game(
                     token,
                     now,
                     poll_settings=PollSettings(force_refresh=refresh_clicked),
                 ),
                 now,
             )
+            active_session = canonical_state.session
+            if active_session is not None:
+                st.session_state[SESSION_KEY] = active_session
         st.session_state[LAST_POLLED_KEY] = now
 
     _render_session_metrics(active_session, now)

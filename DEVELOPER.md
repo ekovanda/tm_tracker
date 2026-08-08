@@ -22,19 +22,19 @@ Tests mirror these boundaries in `tests/`. Streamlit rendering tests use a fake 
 2. Before a session exists, the page loads official campaigns and renders a color-coded 4x4 board preview plus controls for campaign, player timer duration, grace period, and maximum game length. These pending setup values are read from and written to `SHARED_CANONICAL_GAME`, including the board seed changed by shuffle, so connected viewers see the same configuration while the process is running.
 3. Starting a session passes a `BingoSettings` value to `start_canonical_game`, which loads exactly 16 playable tracks and atomically stores the resulting `BingoSession` in `SHARED_CANONICAL_GAME`. The current page mirrors that canonical snapshot into local render state; the settings panel is not rendered while the canonical session exists.
 4. The active-session fragment renders timers, controls, status, the board, and records.
-5. The fragment reruns every second for timer display. Leaderboard polling remains independently gated by `poll_is_due` at one-minute intervals, or by the explicit refresh button.
-6. Polling uses the process-wide `SHARED_POLLING_COORDINATOR`. Successful snapshots are cached for one minute by campaign, token audience, and loader; overlapping viewers single-flight the same refresh, while each session still applies its own record de-duplication and Bingo transition.
+5. The fragment reruns every second for timer display. Leaderboard polling remains independently gated by `poll_is_due` at one-minute intervals, or by the explicit refresh button, and calls `poll_canonical_game` so the resulting session snapshot is shared.
+6. Polling uses the process-wide `SHARED_POLLING_COORDINATOR`. Successful snapshots are cached for one minute by campaign, token audience, and loader; overlapping viewers single-flight the same refresh, while `poll_canonical_game` atomically applies record de-duplication and Bingo transitions to the canonical session.
 7. The coordinator reserves aggregate request start slots across viewers and accounts for request duration, keeping the configured 0.6-second minimum interval. Retryable 429 and 5xx failures use bounded exponential backoff, optionally honoring a numeric `Retry-After` header. Manual refresh bypasses the snapshot cache; automatic refresh remains one-minute gated.
 
 ## State Ownership
 
 There are two deliberately different state scopes:
 
-- `BingoSession` is owned by `SHARED_CANONICAL_GAME` and mirrored into Streamlit session state only as a render cache. It contains the selected campaign, tracks, Bingo board state, record history, and de-duplication keys for the shared game.
+- `BingoSession` is owned by `SHARED_CANONICAL_GAME` and mirrored into Streamlit session state only as a render cache. It contains the selected campaign, tracks, Bingo board state, record history, and de-duplication keys for the shared game. Leaderboard updates enter it through the atomic `poll_canonical_game` service path.
 - `BingoState.settings` stores immutable per-session settings, including the board seed, overall session duration, opening grace period, and player timer duration.
 - `SHARED_MANUAL_TIMER` is a process-wide, thread-safe `ManualTimerStore`. It keeps one `ManualTimerState` per configured player so multiple viewers see the same player timer state.
 
-The canonical-game work introduces `PendingGame`, `CanonicalGameState`, and the locked `CanonicalGameStore` in `bingo_service.py`. `SHARED_CANONICAL_GAME` is the process-wide singleton that all connected viewers use; it models one pending configuration or one started/stopped `BingoSession`, rejects configuration changes after start, and atomically enforces first-start-wins. Pending setup and lifecycle actions use this shared boundary, while active polling and rendering still have browser-local compatibility paths that later steps will migrate. A process restart intentionally clears this in-memory game state, so the next game starts fresh from its selected configuration and current API data; no durable game-state storage is required.
+The canonical-game work introduces `PendingGame`, `CanonicalGameState`, and the locked `CanonicalGameStore` in `bingo_service.py`. `SHARED_CANONICAL_GAME` is the process-wide singleton that all connected viewers use; it models one pending configuration or one started/stopped `BingoSession`, rejects configuration changes after start, and atomically enforces first-start-wins. Pending setup, lifecycle actions, and leaderboard transitions use this shared boundary, while active rendering still has browser-local compatibility paths that later steps will migrate. A process restart intentionally clears this in-memory game state, so the next game starts fresh from its selected configuration and current API data; no durable game-state storage is required.
 
 Do not move timer state into browser-local widget state when changing the timer. The process-wide store is the synchronization boundary for connected viewers. `ManualTimerStore.get_all` updates all states while holding one lock and must not call its lock-acquiring `get` method from inside that lock.
 
@@ -71,7 +71,7 @@ The pure functions in `bingo.py` return new frozen state values rather than muta
 - Timer progress is rendered as an accessible HTML progressbar with a remaining fraction and player-specific color.
 - Streamlit fragment execution is used when the runtime is available. The page has a direct content fallback so rendering helpers remain testable without a live Streamlit runtime.
 - The pre-session settings panel is only rendered when no `BingoSession` exists. It renders the shared seeded board preview and shuffle action. Active sessions expose stop/reset controls and retain the board seed and timing values in their immutable state.
-- The active-session fragment renders the configured grace period's remaining seconds and progress bar immediately before the player timer columns; it reuses the one-second fragment refresh and does not trigger additional leaderboard polling.
+- The active-session fragment renders the configured grace period's remaining seconds and progress bar immediately before the player timer columns; it reuses the one-second fragment refresh, while the gated refresh path updates the canonical session before rendering.
 
 ## Testing and Quality Gates
 

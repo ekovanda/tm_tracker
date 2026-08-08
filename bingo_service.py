@@ -213,6 +213,20 @@ class CanonicalGameStore:
             self._state = replace(self._state, session=None)
             return self._state
 
+    def update_session(
+        self, updater: Callable[[BingoSession], BingoSession]
+    ) -> CanonicalGameState:
+        """Atomically apply one transition to the current canonical session."""
+
+        with self._lock:
+            session = self._state.session
+            if session is None:
+                raise CanonicalGameNotStartedError(
+                    "No canonical Bingo game has started."
+                )
+            self._state = replace(self._state, session=updater(session))
+            return self._state
+
 
 SHARED_CANONICAL_GAME = CanonicalGameStore()
 
@@ -441,18 +455,12 @@ def _new_entries(
     return tuple(entries), frozenset(updated_seen)
 
 
-def poll_session(
+def _fetch_records(
     session: BingoSession,
     jwt_token: str,
-    now: datetime,
-    record_loader: RecordLoader | None = None,
-    poll_settings: PollSettings | None = None,
-) -> BingoSession:
-    """Poll all campaign tracks once and apply the resulting bingo transition."""
-
-    if session.state.status != "active":
-        return session
-
+    record_loader: RecordLoader | None,
+    poll_settings: PollSettings | None,
+) -> tuple[ProcessedRecord, ...]:
     loader = record_loader or _live_record_loader
     settings = poll_settings or PollSettings()
     if settings.request_delay < 0:
@@ -468,7 +476,7 @@ def poll_session(
         if record_loader is None
         else PollingCoordinator(aggregate_pacing=False)
     )
-    records = coordinator.fetch(
+    return coordinator.fetch(
         session.campaign_id,
         _token_audience(jwt_token),
         jwt_token,
@@ -480,6 +488,13 @@ def poll_session(
         force_refresh=settings.force_refresh or record_loader is not None,
         loader_key=None if record_loader is None else id(loader),
     )
+
+
+def _apply_records(
+    session: BingoSession,
+    records: tuple[ProcessedRecord, ...],
+    now: datetime,
+) -> BingoSession:
     entries, seen_records = _new_entries(records, now, session.seen_records)
     return replace(
         session,
@@ -487,6 +502,51 @@ def poll_session(
         records=session.records + entries,
         seen_records=seen_records,
     )
+
+
+def poll_session(
+    session: BingoSession,
+    jwt_token: str,
+    now: datetime,
+    record_loader: RecordLoader | None = None,
+    poll_settings: PollSettings | None = None,
+) -> BingoSession:
+    """Poll all campaign tracks once and apply the resulting bingo transition."""
+
+    if session.state.status != "active":
+        return session
+
+    records = _fetch_records(session, jwt_token, record_loader, poll_settings)
+    return _apply_records(session, records, now)
+
+
+def poll_canonical_game(
+    jwt_token: str,
+    now: datetime,
+    record_loader: RecordLoader | None = None,
+    poll_settings: PollSettings | None = None,
+) -> CanonicalGameState:
+    """Poll and update the one canonical game visible to every viewer."""
+
+    store = SHARED_CANONICAL_GAME
+    snapshot = store.get()
+    session = snapshot.session
+    if session is None:
+        raise CanonicalGameNotStartedError("No canonical Bingo game has started.")
+    if session.state.status != "active":
+        return snapshot
+
+    records = _fetch_records(session, jwt_token, record_loader, poll_settings)
+
+    def apply_if_same_game(current: BingoSession) -> BingoSession:
+        if (
+            current.campaign_id != session.campaign_id
+            or current.state.started_at != session.state.started_at
+        ):
+            return current
+        return _apply_records(current, records, now)
+
+    return store.update_session(apply_if_same_game)
 
 
 def _load_record(loader: RecordLoader, track: Track, jwt_token: str) -> ProcessedRecord:

@@ -375,7 +375,9 @@ def test_active_session_refreshes_and_displays_status():
             return_value=[SimpleNamespace(campaign_id="campaign", name="Summer")],
         ),
         patch.object(
-            bingo_page_module, "poll_session_in_state", return_value=session
+            bingo_page_module,
+            "poll_canonical_game",
+            side_effect=lambda *_args, **_kwargs: get_canonical_game_store().get(),
         ) as poll,
     ):
         bingo_page()
@@ -515,7 +517,11 @@ def test_start_stop_and_reset_controls_delegate_to_service():
                 session
             ),
         ) as start,
-        patch.object(bingo_page_module, "poll_session_in_state", return_value=session),
+        patch.object(
+            bingo_page_module,
+            "poll_canonical_game",
+            side_effect=lambda *_args, **_kwargs: get_canonical_game_store().get(),
+        ),
     ):
         bingo_page()
     start.assert_called_once()
@@ -589,7 +595,11 @@ def test_stop_and_reset_controls_delegate_to_service():
             bingo_page_module, "get_official_campaigns", return_value=campaign
         ),
         patch.object(bingo_page_module, "stop_canonical_game") as stop,
-        patch.object(bingo_page_module, "poll_session_in_state", return_value=session),
+        patch.object(
+            bingo_page_module,
+            "poll_canonical_game",
+            side_effect=lambda *_args, **_kwargs: get_canonical_game_store().get(),
+        ),
     ):
         bingo_page()
     stop.assert_called_once_with()
@@ -604,7 +614,11 @@ def test_stop_and_reset_controls_delegate_to_service():
             bingo_page_module, "get_official_campaigns", return_value=campaign
         ),
         patch.object(bingo_page_module, "reset_canonical_game") as reset,
-        patch.object(bingo_page_module, "poll_session_in_state", return_value=session),
+        patch.object(
+            bingo_page_module,
+            "poll_canonical_game",
+            side_effect=lambda *_args, **_kwargs: get_canonical_game_store().get(),
+        ),
     ):
         bingo_page()
     reset.assert_called_once_with()

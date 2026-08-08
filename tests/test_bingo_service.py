@@ -4,6 +4,7 @@ from threading import Event, Thread
 
 import pytest
 
+import bingo_service
 from bingo import BingoSettings
 from bingo_service import (
     MAX_REQUESTS_PER_SECOND,
@@ -19,6 +20,7 @@ from bingo_service import (
     PollSettings,
     get_canonical_game_store,
     get_manual_timers,
+    poll_canonical_game,
     poll_session,
     poll_session_in_state,
     reset_canonical_game,
@@ -238,6 +240,43 @@ def test_poll_logs_only_new_records_and_updates_bingo_state():
     assert len(duplicate.records) == 32
     assert len(changed.records) == 48
     assert first.state.timer_owner is PLAYERS[1]
+
+
+def test_canonical_poll_converges_viewers_without_duplicate_records_or_requests(
+    monkeypatch,
+):
+    reset_canonical_game()
+    start_canonical_game(
+        "campaign",
+        "jwt",
+        START,
+        make_loader(),
+        BingoSettings(grace_period=timedelta()),
+    )
+    calls = []
+    record_loader = make_record_loader()
+
+    def load(track, jwt_token):
+        calls.append(track.number)
+        return record_loader(track, jwt_token)
+
+    monkeypatch.setattr(bingo_service, "_live_record_loader", load)
+    poll_settings = PollSettings(
+        sleep_fn=no_sleep,
+        coordinator=PollingCoordinator(aggregate_pacing=False),
+    )
+
+    first_view = poll_canonical_game("jwt", START, poll_settings=poll_settings)
+    second_view = poll_canonical_game(
+        "jwt", START + timedelta(minutes=1), poll_settings=poll_settings
+    )
+
+    assert first_view == second_view
+    assert second_view.session is not None
+    assert len(second_view.session.records) == 32
+    assert len(calls) == 16
+    assert get_canonical_game_store().get() == second_view
+    reset_canonical_game()
 
 
 def test_poll_paces_requests_in_track_order_with_configured_delay():

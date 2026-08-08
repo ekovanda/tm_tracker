@@ -9,7 +9,7 @@ The project is intended to make a live Trackmania challenge easy to run and easy
 - Select an official campaign from Nadeo Live Services.
 - Build a fair 4x4 Bingo board from the 16 playable campaign tracks.
 - Compare the configured players' personal bests and identify track ownership.
-- Poll leaderboard data at a controlled cadence instead of flooding the service.
+- Poll leaderboard data at a controlled cadence instead of flooding the service, applying each processed snapshot once to the shared game.
 - Coordinate leaderboard polling across viewers with shared snapshots, aggregate pacing, and bounded recovery from transient service limits.
 - Keep a timestamped record of newly observed personal bests during the session.
 - Show the shared game state and one independently controlled timer for each player.
