@@ -37,15 +37,26 @@ class BingoState:
 
 
 def build_bingo_grid(tracks: Iterable[Track]) -> tuple[tuple[Track, ...], ...]:
-    """Arrange four tracks from each campaign batch in every row and column."""
+    """Arrange the four campaign series evenly across a unique 4x4 grid."""
 
     ordered_tracks = list(tracks)
-    if len(ordered_tracks) != 16:
-        raise ValueError("The bingo grid requires exactly 16 tracks.")
+    track_numbers = [track.number for track in ordered_tracks]
+    if len(ordered_tracks) != 16 or len(set(track_numbers)) != 16:
+        raise ValueError("The bingo grid requires exactly 16 distinct tracks.")
+    if set(track_numbers) != set(PLAYABLE_TRACK_NUMBERS):
+        raise ValueError("The bingo grid requires the 16 playable campaign tracks.")
 
-    batches = [ordered_tracks[index : index + 4] for index in range(0, 16, 4)]
+    batches: dict[int, list[Track]] = {index: [] for index in range(4)}
+    for track in ordered_tracks:
+        if track.number is None:
+            raise ValueError("The bingo grid requires numbered tracks.")
+        batch = (track.number - 1) // 5
+        batches[batch].append(track)
+
     return tuple(
-        tuple(batches[(row + column) % 4][(row + column) % 4] for column in range(4))
+        tuple(
+            batches[(row + column) % 4][(row + 2 * column) % 4] for column in range(4)
+        )
         for row in range(4)
     )
 

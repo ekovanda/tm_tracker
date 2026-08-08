@@ -46,9 +46,36 @@ def test_grid_has_one_track_from_each_batch_in_each_row_and_column():
     )
 
 
+def test_grid_has_unique_playable_tracks_and_expected_arrangement():
+    grid = build_bingo_grid(make_tracks())
+    numbers = [track.number for row in grid for track in row]
+
+    assert len(numbers) == len(set(numbers)) == 16
+    assert not set(numbers) & {5, 10, 15, 20}
+    assert [[track.number for track in row] for row in grid] == [
+        [1, 8, 11, 18],
+        [7, 14, 17, 4],
+        [13, 16, 3, 6],
+        [19, 2, 9, 12],
+    ]
+
+
 def test_grid_requires_sixteen_tracks():
     with pytest.raises(ValueError, match="exactly 16"):
         build_bingo_grid(make_tracks()[:-1])
+
+    duplicate_tracks = make_tracks()
+    duplicate_tracks[-1] = duplicate_tracks[0]
+    with pytest.raises(ValueError, match="distinct"):
+        build_bingo_grid(duplicate_tracks)
+
+
+def test_grid_rejects_non_playable_track_numbers():
+    tracks = make_tracks()
+    tracks[-1] = Track("Track 5", "uid-5", 5)
+
+    with pytest.raises(ValueError, match="playable"):
+        build_bingo_grid(tracks)
 
 
 def test_ranking_handles_missing_times_and_ties():
