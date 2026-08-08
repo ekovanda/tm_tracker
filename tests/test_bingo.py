@@ -8,6 +8,7 @@ from bingo import (
     build_bingo_grid,
     manual_timer_remaining,
     rank_track,
+    restart_manual_timer,
     start_bingo,
     start_manual_timer,
     stop_bingo,
@@ -153,6 +154,16 @@ def test_manual_timer_counts_down_and_expires_after_ten_minutes():
     assert manual_timer_remaining(expired, start + MANUAL_TIMER_DURATION) == timedelta(
         0
     )
+
+
+def test_manual_timer_can_restart_from_any_terminal_state():
+    start = datetime(2026, 1, 1, tzinfo=UTC)
+    restarted = restart_manual_timer(
+        ManualTimerState("expired", start), start + timedelta(minutes=12)
+    )
+
+    assert restarted.status == "active"
+    assert restarted.started_at == start + timedelta(minutes=12)
 
 
 def test_manual_timer_start_stop_and_expiry_are_terminal():

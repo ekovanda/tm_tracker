@@ -14,8 +14,10 @@ from streamlit_bingo_page import (
     display_deadline,
     display_manual_timer,
     display_margin,
+    manual_timer_progress,
     owner_color,
     poll_is_due,
+    timer_color,
 )
 from track import Track
 
@@ -24,6 +26,13 @@ def test_poll_is_due_handles_initial_and_one_minute_windows():
     now = datetime(2026, 1, 1, tzinfo=UTC)
     assert poll_is_due(None, now)
     assert not poll_is_due(now, now + timedelta(seconds=59))
+    assert poll_is_due(now, now + timedelta(minutes=1))
+
+
+def test_timer_refreshes_every_second_without_shortening_poll_window():
+    assert bingo_page_module.TIMER_REFRESH_INTERVAL_SECONDS == 1
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    assert not poll_is_due(now, now + timedelta(seconds=1))
     assert poll_is_due(now, now + timedelta(minutes=1))
 
 
@@ -38,6 +47,14 @@ def test_board_display_helpers_format_owner_margin_and_deadline():
     )
 
 
+def test_timer_colors_identify_each_player():
+    assert [timer_color(player) for player in PLAYERS] == [
+        "#16a34a",
+        "#eab308",
+        "#3b82f6",
+    ]
+
+
 def test_manual_timer_display_shows_remaining_and_terminal_states():
     now = datetime(2026, 1, 1, tzinfo=UTC)
     assert display_manual_timer(ManualTimerState(), now) == "Not started"
@@ -49,6 +66,15 @@ def test_manual_timer_display_shows_remaining_and_terminal_states():
     )
     assert display_manual_timer(ManualTimerState("expired", now), now) == "Expired"
     assert display_manual_timer(ManualTimerState("stopped", now), now) == "Stopped"
+
+
+def test_manual_timer_progress_depletes_from_full_to_empty():
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    assert manual_timer_progress(ManualTimerState(), now) == 1.0
+    active = ManualTimerState("active", now)
+    assert manual_timer_progress(active, now + timedelta(minutes=2)) == 0.8
+    assert manual_timer_progress(ManualTimerState("expired", now), now) == 0.0
+    assert manual_timer_progress(ManualTimerState("stopped", now), now) == 0.0
 
 
 class FakeColumn:
@@ -66,10 +92,14 @@ class FakeStreamlit:
         self.caption_calls = []
         self.info_calls = []
         self.button_calls = []
+        self.metric_calls = []
         self.button_results = button_results or {}
 
     def columns(self, count):
         return [FakeColumn() for _ in range(count)]
+
+    def container(self, **_kwargs):
+        return FakeColumn()
 
     def markdown(self, value, **_kwargs):
         self.markdown_calls.append(value)
@@ -97,7 +127,7 @@ class FakeStreamlit:
         self.caption_calls.append(_args[0])
 
     def metric(self, *_args, **_kwargs):
-        pass
+        self.metric_calls.append((_args, _kwargs))
 
     def rerun(self):
         pass
@@ -176,17 +206,44 @@ def test_active_session_refreshes_and_displays_status():
         "icon": ":material/restart_alt:",
         "use_container_width": True,
     }
-    assert buttons["Start 10-minute timer"] == {
-        "disabled": False,
-        "type": "primary",
-        "icon": ":material/timer:",
-        "use_container_width": True,
+    timer_buttons = [
+        (label, kwargs)
+        for label, kwargs in fake_st.button_calls
+        if label in {"Restart", "Start"}
+    ]
+    assert len(timer_buttons) == len(PLAYERS)
+    assert {kwargs["key"].rsplit("_", 1)[-1] for _label, kwargs in timer_buttons} == {
+        player.account_id for player in PLAYERS
     }
+    for label, kwargs in timer_buttons:
+        assert kwargs["type"] == "primary"
+        assert kwargs["use_container_width"] is True
+        assert kwargs["icon"] == (
+            ":material/restart_alt:" if label == "Restart" else ":material/timer:"
+        )
+    for player in PLAYERS:
+        stop_buttons = [
+            kwargs
+            for label, kwargs in fake_st.button_calls
+            if label == "Stop" and kwargs["key"] == f"timer_stop_{player.account_id}"
+        ]
+        assert len(stop_buttons) == 1
+        assert stop_buttons[0]["disabled"] is True
+        assert stop_buttons[0]["type"] == "secondary"
     assert buttons["Refresh rankings"] == {
         "type": "secondary",
         "icon": ":material/refresh:",
         "use_container_width": True,
     }
+    timer_metrics = [call for call in fake_st.metric_calls if "timer" in call[0][0]]
+    assert {call[0][0] for call in timer_metrics} == {
+        f"{player.alias} timer" for player in PLAYERS
+    }
+    for player in PLAYERS:
+        assert any(
+            player.alias in call and timer_color(player) in call
+            for call in fake_st.markdown_calls
+        )
 
 
 def test_records_view_renders_newest_records_first():

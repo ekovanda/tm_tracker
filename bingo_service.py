@@ -10,6 +10,7 @@ import live_services
 from bingo import (
     BingoState,
     ManualTimerState,
+    restart_manual_timer,
     start_bingo,
     start_manual_timer,
     stop_bingo,
@@ -33,28 +34,45 @@ class ManualTimerStore:
     """Thread-safe process-wide storage shared by Streamlit viewers."""
 
     def __init__(self) -> None:
-        self._state = ManualTimerState()
+        self._states = {player.account_id: ManualTimerState() for player in PLAYERS}
         self._lock = Lock()
 
-    def get(self, now: datetime) -> ManualTimerState:
+    def get(self, player: Player, now: datetime) -> ManualTimerState:
         with self._lock:
-            self._state = update_manual_timer(self._state, now)
-            return self._state
+            state = update_manual_timer(self._states[player.account_id], now)
+            self._states[player.account_id] = state
+            return state
 
-    def start(self, started_at: datetime) -> ManualTimerState:
+    def get_all(self, now: datetime) -> dict[str, ManualTimerState]:
         with self._lock:
-            self._state = start_manual_timer(self._state, started_at)
-            return self._state
+            for player in PLAYERS:
+                self._states[player.account_id] = update_manual_timer(
+                    self._states[player.account_id], now
+                )
+            return self._states.copy()
 
-    def stop(self) -> ManualTimerState:
+    def start(self, player: Player, started_at: datetime) -> ManualTimerState:
         with self._lock:
-            self._state = stop_manual_timer(self._state)
-            return self._state
+            state = start_manual_timer(self._states[player.account_id], started_at)
+            self._states[player.account_id] = state
+            return state
 
-    def reset(self) -> ManualTimerState:
+    def stop(self, player: Player) -> ManualTimerState:
         with self._lock:
-            self._state = ManualTimerState()
-            return self._state
+            state = stop_manual_timer(self._states[player.account_id])
+            self._states[player.account_id] = state
+            return state
+
+    def restart(self, player: Player, started_at: datetime) -> ManualTimerState:
+        with self._lock:
+            state = restart_manual_timer(self._states[player.account_id], started_at)
+            self._states[player.account_id] = state
+            return state
+
+    def reset(self) -> dict[str, ManualTimerState]:
+        with self._lock:
+            self._states = {player.account_id: ManualTimerState() for player in PLAYERS}
+            return self._states.copy()
 
 
 SHARED_MANUAL_TIMER = ManualTimerStore()
@@ -186,26 +204,44 @@ def stop_session(session: BingoSession) -> BingoSession:
     return replace(session, state=stop_bingo(session.state))
 
 
-def get_manual_timer(now: datetime) -> ManualTimerState:
-    """Read and expire the process-wide manual timer."""
+def get_manual_timers(now: datetime) -> dict[str, ManualTimerState]:
+    """Read and expire all process-wide player timers."""
 
-    return SHARED_MANUAL_TIMER.get(now)
-
-
-def start_manual_timer_for_all(started_at: datetime) -> ManualTimerState:
-    """Start the manual timer shared by all viewers of the app process."""
-
-    return SHARED_MANUAL_TIMER.start(started_at)
+    return SHARED_MANUAL_TIMER.get_all(now)
 
 
-def stop_manual_timer_for_all() -> ManualTimerState:
-    """Stop the manual timer shared by all viewers."""
+def start_manual_timer_for_player(
+    player: Player, started_at: datetime
+) -> ManualTimerState:
+    """Start one player's timer for every viewer of the app process."""
 
-    return SHARED_MANUAL_TIMER.stop()
+    return SHARED_MANUAL_TIMER.start(player, started_at)
 
 
-def reset_manual_timer_for_all() -> ManualTimerState:
-    """Reset the shared manual timer for a new game."""
+def stop_manual_timer_for_player(player: Player) -> ManualTimerState:
+    """Stop one player's timer for every viewer of the app process."""
+
+    return SHARED_MANUAL_TIMER.stop(player)
+
+
+def stop_manual_timers() -> dict[str, ManualTimerState]:
+    """Stop every player's timer when the Bingo session ends."""
+
+    return {
+        player.account_id: stop_manual_timer_for_player(player) for player in PLAYERS
+    }
+
+
+def restart_manual_timer_for_player(
+    player: Player, started_at: datetime
+) -> ManualTimerState:
+    """Restart one player's timer from ten minutes for every viewer."""
+
+    return SHARED_MANUAL_TIMER.restart(player, started_at)
+
+
+def reset_manual_timers() -> dict[str, ManualTimerState]:
+    """Reset every player's timer for a new game."""
 
     return SHARED_MANUAL_TIMER.reset()
 

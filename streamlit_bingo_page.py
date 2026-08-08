@@ -7,17 +7,18 @@ from typing import cast
 
 import streamlit as st
 
-from bingo import ManualTimerState, manual_timer_remaining
+from bingo import MANUAL_TIMER_DURATION, ManualTimerState, manual_timer_remaining
 from bingo_service import (
     SESSION_KEY,
     BingoSession,
-    get_manual_timer,
+    get_manual_timers,
     poll_session_in_state,
-    reset_manual_timer_for_all,
+    reset_manual_timers,
     reset_session,
-    start_manual_timer_for_all,
+    restart_manual_timer_for_player,
     start_session_in_state,
-    stop_manual_timer_for_all,
+    stop_manual_timer_for_player,
+    stop_manual_timers,
     stop_session_in_state,
 )
 from live_services import Campaign, get_official_campaigns
@@ -27,6 +28,12 @@ from utils import prettify_time
 CAMPAIGNS_KEY = "bingo_campaigns"
 LAST_POLLED_KEY = "bingo_last_polled_at"
 POLL_INTERVAL = timedelta(minutes=1)
+TIMER_REFRESH_INTERVAL_SECONDS = 1
+TIMER_PLAYER_COLORS = {
+    PLAYERS[0].account_id: "#16a34a",
+    PLAYERS[1].account_id: "#eab308",
+    PLAYERS[2].account_id: "#3b82f6",
+}
 OWNER_COLORS = {
     PLAYERS[0].account_id: "#d95f59",
     PLAYERS[1].account_id: "#3b82f6",
@@ -64,6 +71,24 @@ def display_manual_timer(timer: ManualTimerState, now: datetime) -> str:
     remaining = manual_timer_remaining(timer, now)
     total_seconds = int(remaining.total_seconds())
     return f"{total_seconds // 60:02d}:{total_seconds % 60:02d}"
+
+
+def manual_timer_progress(timer: ManualTimerState, now: datetime) -> float:
+    """Return the remaining fraction for the shared timer progress bar."""
+
+    if timer.status == "ready":
+        return 1.0
+    if timer.status != "active":
+        return 0.0
+    remaining = manual_timer_remaining(timer, now).total_seconds()
+    duration = MANUAL_TIMER_DURATION.total_seconds()
+    return max(0.0, min(1.0, remaining / duration))
+
+
+def timer_color(player: Player) -> str:
+    """Return the configured timer color for a player."""
+
+    return TIMER_PLAYER_COLORS[player.account_id]
 
 
 def display_deadline(started_at: datetime) -> str:
@@ -144,9 +169,7 @@ def _render_records(session: BingoSession) -> None:
             st.markdown(f"**{prettify_time(entry.time)}**")
 
 
-def _render_session_metrics(
-    session: BingoSession, now: datetime, manual_timer: ManualTimerState
-) -> None:
+def _render_session_metrics(session: BingoSession, now: datetime) -> None:
     last_polled_at = st.session_state.get(LAST_POLLED_KEY)
     current_time = now.astimezone().strftime("%H:%M:%S")
     last_refresh = (
@@ -158,15 +181,114 @@ def _render_session_metrics(
     if session.state.winner:
         status = f"{status}: {session.state.winner.alias} wins"
 
-    status_column, timer_column, current_column, refresh_column = st.columns(4)
+    status_column, current_column, refresh_column = st.columns(3)
     with status_column:
         st.metric("Game status", status)
-    with timer_column:
-        st.metric("Shared timer", display_manual_timer(manual_timer, now))
     with current_column:
         st.metric("Current time", current_time)
     with refresh_column:
         st.metric("Last refresh", last_refresh)
+
+
+def _render_manual_timer(
+    player: Player, timer: ManualTimerState, now: datetime
+) -> None:
+    color = timer_color(player)
+    with st.container(border=True):
+        st.markdown(
+            f'<h3 style="border-left: 0.4rem solid {color}; padding-left: 0.7rem; '
+            f'margin: 0 0 0.6rem 0;">{escape(player.alias)}</h3>',
+            unsafe_allow_html=True,
+        )
+        timer_display = display_manual_timer(timer, now)
+        st.metric(f"{player.alias} timer", timer_display)
+        percentage = manual_timer_progress(timer, now) * 100
+        st.markdown(
+            f'<div role="progressbar" aria-label="{escape(player.alias)} timer" '
+            f'aria-valuemin="0" aria-valuemax="100" aria-valuenow="{percentage:.0f}" '
+            f'style="background:#e5e7eb; border-radius:999px; height:0.8rem; '
+            f'overflow:hidden; margin:0.4rem 0 0.9rem;">'
+            f'<div style="background:{color}; height:100%; width:{percentage:.2f}%; '
+            f'transition:width 0.4s linear;"></div></div>',
+            unsafe_allow_html=True,
+        )
+        action_column, stop_column = st.columns(2)
+        with action_column:
+            if timer.status == "ready":
+                start_clicked = st.button(
+                    "Start",
+                    type="primary",
+                    icon=":material/timer:",
+                    use_container_width=True,
+                    key=f"timer_start_{player.account_id}",
+                )
+            else:
+                start_clicked = st.button(
+                    "Restart",
+                    type="primary",
+                    icon=":material/restart_alt:",
+                    use_container_width=True,
+                    key=f"timer_restart_{player.account_id}",
+                )
+        with stop_column:
+            stop_clicked = st.button(
+                "Stop",
+                disabled=timer.status != "active",
+                type="secondary",
+                icon=":material/stop:",
+                use_container_width=True,
+                key=f"timer_stop_{player.account_id}",
+            )
+
+    if start_clicked:
+        restart_manual_timer_for_player(player, now)
+        st.rerun()
+    if stop_clicked:
+        stop_manual_timer_for_player(player)
+        st.rerun()
+
+
+def _render_active_session_content() -> None:
+    active_session = st.session_state.get(SESSION_KEY)
+    if not isinstance(active_session, BingoSession):
+        return
+
+    now = datetime.now(UTC)
+    manual_timers = get_manual_timers(now)
+    timer_columns = st.columns(len(PLAYERS))
+    for player, column in zip(PLAYERS, timer_columns):
+        with column:
+            _render_manual_timer(player, manual_timers[player.account_id], now)
+    refresh_clicked = st.button(
+        "Refresh rankings",
+        type="secondary",
+        icon=":material/refresh:",
+        use_container_width=True,
+    )
+    last_polled_at = st.session_state.get(LAST_POLLED_KEY)
+    if refresh_clicked or poll_is_due(last_polled_at, now):
+        with st.spinner("Refreshing rankings..."):
+            active_session = poll_session_in_state(
+                _typed_session_state(), _access_token(), now
+            )
+        st.session_state[LAST_POLLED_KEY] = now
+
+    _render_session_metrics(active_session, now)
+    _render_board(active_session)
+    _render_records(active_session)
+
+
+@st.fragment(run_every=TIMER_REFRESH_INTERVAL_SECONDS)
+def _render_active_session_fragment() -> None:
+    _render_active_session_content()
+
+
+def _render_active_session() -> None:
+    runtime = getattr(st, "runtime", None)
+    if runtime is not None and runtime.exists():
+        _render_active_session_fragment()
+        return
+    _render_active_session_content()
 
 
 def bingo_page() -> None:
@@ -213,7 +335,7 @@ def bingo_page() -> None:
 
     if start_clicked:
         now = datetime.now(UTC)
-        reset_manual_timer_for_all()
+        reset_manual_timers()
         start_session_in_state(
             _typed_session_state(), campaign.campaign_id, _access_token(), now
         )
@@ -221,11 +343,11 @@ def bingo_page() -> None:
         st.rerun()
     if stop_clicked:
         stop_session_in_state(_typed_session_state())
-        stop_manual_timer_for_all()
+        stop_manual_timers()
         st.rerun()
     if reset_clicked:
         reset_session(_typed_session_state())
-        reset_manual_timer_for_all()
+        reset_manual_timers()
         st.session_state.pop(LAST_POLLED_KEY, None)
         st.rerun()
 
@@ -234,32 +356,4 @@ def bingo_page() -> None:
         st.info("Choose an official campaign and start a bingo session.")
         return
 
-    now = datetime.now(UTC)
-    manual_timer = get_manual_timer(now)
-    timer_clicked = st.button(
-        "Start 10-minute timer",
-        disabled=manual_timer.status != "ready",
-        type="primary",
-        icon=":material/timer:",
-        use_container_width=True,
-    )
-    if timer_clicked:
-        manual_timer = start_manual_timer_for_all(now)
-        st.rerun()
-    refresh_clicked = st.button(
-        "Refresh rankings",
-        type="secondary",
-        icon=":material/refresh:",
-        use_container_width=True,
-    )
-    last_polled_at = st.session_state.get(LAST_POLLED_KEY)
-    if refresh_clicked or poll_is_due(last_polled_at, now):
-        with st.spinner("Refreshing rankings..."):
-            active_session = poll_session_in_state(
-                _typed_session_state(), _access_token(), now
-            )
-        st.session_state[LAST_POLLED_KEY] = now
-
-    _render_session_metrics(active_session, now, manual_timer)
-    _render_board(active_session)
-    _render_records(active_session)
+    _render_active_session()

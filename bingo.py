@@ -168,6 +168,14 @@ def stop_manual_timer(timer: ManualTimerState) -> ManualTimerState:
     return replace(timer, status="stopped")
 
 
+def restart_manual_timer(
+    _timer: ManualTimerState, started_at: datetime
+) -> ManualTimerState:
+    """Start a fresh ten-minute timer from any previous timer state."""
+
+    return ManualTimerState(status="active", started_at=started_at)
+
+
 def update_manual_timer(timer: ManualTimerState, now: datetime) -> ManualTimerState:
     """Expire an active manual timer when its ten-minute duration elapses."""
 

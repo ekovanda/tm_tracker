@@ -6,9 +6,10 @@ from authentication import (
 )
 from streamlit_bingo_page import bingo_page
 
+st.set_page_config(layout="wide")
+
 
 def main():
-
     # Authentication
     if "nadeo_jwt_token" not in st.session_state:
         try:

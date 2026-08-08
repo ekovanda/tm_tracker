@@ -8,11 +8,14 @@ from bingo_service import (
     BingoSession,
     ManualTimerStore,
     PollSettings,
+    get_manual_timers,
     poll_session,
     poll_session_in_state,
     reset_session,
+    restart_manual_timer_for_player,
     start_session,
     start_session_in_state,
+    stop_manual_timer_for_player,
     stop_session,
     stop_session_in_state,
 )
@@ -169,8 +172,25 @@ def test_state_helpers_require_a_session():
 
 def test_manual_timer_store_is_shared_and_expires_from_reads():
     store = ManualTimerStore()
-    store.start(START)
+    store.start(PLAYERS[0], START)
 
-    assert store.get(START + timedelta(minutes=1)).status == "active"
-    assert store.get(START + timedelta(minutes=10)).status == "expired"
-    assert store.reset().status == "ready"
+    assert store.get(PLAYERS[0], START + timedelta(minutes=1)).status == "active"
+    assert store.get(PLAYERS[0], START + timedelta(minutes=10)).status == "expired"
+    assert all(timer.status == "ready" for timer in store.reset().values())
+
+
+def test_manual_timer_store_and_shared_helpers_are_independent_per_player():
+    store = ManualTimerStore()
+    store.start(PLAYERS[0], START)
+    restarted = store.restart(PLAYERS[0], START + timedelta(minutes=5))
+
+    assert restarted.status == "active"
+    assert restarted.started_at == START + timedelta(minutes=5)
+    assert store.get(PLAYERS[0], START).status == "active"
+    assert store.get(PLAYERS[1], START).status == "ready"
+    assert restart_manual_timer_for_player(PLAYERS[1], START).status == "active"
+    assert stop_manual_timer_for_player(PLAYERS[1]).status == "stopped"
+    timers = get_manual_timers(START)
+    assert timers[PLAYERS[0].account_id].status == "ready"
+    assert timers[PLAYERS[1].account_id].status == "stopped"
+    assert timers[PLAYERS[2].account_id].status == "ready"
