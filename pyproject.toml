@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "tm-tracker"
 version = "0.1.0"
 description = "Streamlit Trackmania tracking application"
-requires-python = ">=3.12"
+requires-python = ">=3.13,<3.14"
 dependencies = [
     "python-dotenv",
     "streamlit",
