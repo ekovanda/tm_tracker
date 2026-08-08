@@ -17,6 +17,7 @@ from bingo_service import (
     PendingGame,
     PollingCoordinator,
     PollSettings,
+    get_canonical_game_store,
     get_manual_timers,
     poll_session,
     poll_session_in_state,
@@ -102,6 +103,12 @@ def test_canonical_game_store_shares_pending_configuration():
     assert configured == store.get()
     assert configured.pending == pending
     assert configured.session is None
+
+
+def test_canonical_game_store_is_process_wide_and_fresh_store_is_empty():
+    assert get_canonical_game_store() is get_canonical_game_store()
+    assert get_canonical_game_store().get().session is None
+    assert CanonicalGameStore().get().session is None
 
 
 def test_canonical_game_store_rejects_invalid_or_conflicting_starts():

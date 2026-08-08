@@ -211,6 +211,15 @@ class CanonicalGameStore:
             return self._state
 
 
+SHARED_CANONICAL_GAME = CanonicalGameStore()
+
+
+def get_canonical_game_store() -> CanonicalGameStore:
+    """Return the process-wide canonical game store for all viewers."""
+
+    return SHARED_CANONICAL_GAME
+
+
 @dataclass(frozen=True)
 class PollSnapshot:
     """Successful raw leaderboard records shared between Streamlit viewers."""

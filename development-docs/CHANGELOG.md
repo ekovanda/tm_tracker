@@ -26,6 +26,7 @@ All notable changes to this project are documented here.
 
 ### Changed
 
+- 2026-08-08T20:20:56+02:00: Made the canonical Bingo game store process-wide so connected viewers can share one live game without external game-state storage. A commit ID is not applicable before the resulting commit exists.
 - 2026-08-08T20:15:44+02:00: Defined the thread-safe canonical Bingo game boundary that will allow one pending or started game state to be shared by all viewers. A commit ID is not applicable before the resulting commit exists.
 - 2026-08-08T20:00:48+02:00: Moved runtime authentication and optional app identity settings from `.env` to Streamlit-managed `.streamlit/secrets.toml` configuration. A commit ID is not applicable before the resulting commit exists.
 - 2026-08-08T19:38:29+02:00: Documented the changelog maintenance convention and reconciled Unreleased entries with the completed commit history. A commit ID is not applicable before the resulting commit exists.
