@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tm-tracker"
+version = "0.1.0"
+description = "Streamlit Trackmania tracking application"
+requires-python = ">=3.12"
+dependencies = [
+    "python-dotenv",
+    "streamlit",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ipykernel",
+    "mypy",
+    "pylint",
+    "pre-commit",
+    "pytest",
+    "pytest-cov",
+    "ruff",
+]
+
+[tool.setuptools]
+py-modules = [
+    "authentication",
+    "config",
+    "live_services",
+    "player",
+    "streamlit_app",
+    "streamlit_overview_page",
+    "streamlit_player_focus_page",
+    "streamlit_track_focus_page",
+    "tm_lookups",
+    "track",
+    "utils",
+]
+
+[tool.mypy]
+explicit_package_bases = true
+
+[tool.pylint.messages_control]
+disable = [
+    "attribute-defined-outside-init",
+    "missing-class-docstring",
+    "missing-function-docstring",
+    "missing-module-docstring",
+    "too-few-public-methods",
+]

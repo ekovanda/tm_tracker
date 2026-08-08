@@ -13,7 +13,7 @@ Create a focused local commit after implementation is complete.
 
 1. Inspect `git status --short` and the diff. Preserve unrelated user changes.
 2. Review the feature's `development-docs/CHANGELOG.md` entry and confirm the workflow documents in `development-docs/` are clean and current.
-3. Run the narrowest relevant validation inside Docker with `docker compose run --rm app <command>`. If it fails, do not commit; report the failure.
+3. Run the narrowest relevant validation in the activated project virtual environment through uv, such as `uv run --active python -m pytest`. If validation fails, do not commit; report the failure.
 4. Inspect the exact files that will be staged. Do not stage `.env`, credentials, tokens, private keys, or other secret material.
 5. Stage only files belonging to the completed feature.
 6. Create one local commit with an imperative message in this form: `type(scope) short summary`.

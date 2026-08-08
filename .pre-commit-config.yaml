@@ -3,24 +3,24 @@ repos:
     hooks:
       - id: ruff-format
         name: ruff format
-        entry: docker compose run --rm app ruff format
+        entry: ruff format
         language: system
         types: [python]
 
       - id: ruff-check
         name: ruff lint
-        entry: docker compose run --rm app ruff check
+        entry: ruff check
         language: system
         types: [python]
 
       - id: pylint
         name: pylint
-        entry: docker compose run --rm app pylint
+        entry: pylint
         language: system
         types: [python]
 
       - id: mypy
         name: mypy
-        entry: docker compose run --rm app mypy
+        entry: mypy
         language: system
         types: [python]

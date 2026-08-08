@@ -1,6 +1,6 @@
 ---
 name: implement-next
-description: "Implement the next unchecked step in development-docs/IMPLEMENTATION-PLAN.md for this Dockerized Python and Streamlit project. Use after plan-implementation, one step per invocation, with Docker-based focused validation and changelog maintenance."
+description: "Implement the next unchecked step in development-docs/IMPLEMENTATION-PLAN.md for this Python and Streamlit project. Use after plan-implementation, one step per invocation, with focused validation and changelog maintenance."
 argument-hint: "Optional instruction for the next plan step"
 user-invocable: true
 ---
@@ -13,9 +13,9 @@ Advance the current implementation plan by one step.
 
 1. Read `development-docs/IMPLEMENTATION-PLAN.md` and select the first unchecked step. Read only the nearby source and tests needed to implement it.
 2. Check the worktree before editing. Do not overwrite or revert unrelated user changes.
-3. Implement only that step, following existing project patterns. Use Docker for all Python execution and `uv` inside the container for dependency operations. Never expose secrets.
-4. Add or update automated tests for every behavior-changing step. Run the step's stated validation, or the narrowest available check, with `docker compose run --rm app <command>`. Fix local failures before continuing.
-5. For testable Python feature code, require at least 85% line coverage for the changed modules. Use `docker compose run --rm app pytest --cov=<changed-module> --cov-report=term-missing --cov-fail-under=85` or an equivalent focused command.
+3. Implement only that step, following existing project patterns. Use the activated project virtual environment for Python execution and uv for dependency operations. Never expose secrets.
+4. Add or update automated tests for every behavior-changing step. Run the step's stated validation, or the narrowest available check, with uv (for example `uv run --active python -m pytest`). Fix local failures before continuing.
+5. For testable Python feature code, require at least 85% line coverage for the changed modules. Use `uv run --active python -m pytest --cov=<changed-module> --cov-report=term-missing --cov-fail-under=85` or an equivalent focused command.
 6. If the 85% target cannot be met because the code is difficult to test, add the missing seams or tests. Do not lower the threshold or mark the step complete without documenting an explicit user-approved exception in the plan.
 7. Mark only the completed step as `[x]` in `development-docs/IMPLEMENTATION-PLAN.md`.
 8. Keep the plan concise: update wording only when implementation revealed a necessary, concrete correction. Do not add a progress diary.

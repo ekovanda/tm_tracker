@@ -1,0 +1,141 @@
+import json
+from unittest.mock import Mock, patch
+
+import pytest
+
+from live_services import (
+    LIVE_SERVICES_URL,
+    PLAYABLE_TRACK_NUMBERS,
+    _get_player_by_account_id,
+    _get_track_by_uid,
+    get_campaign_tracks,
+    get_club_track_pbs,
+    get_official_campaigns,
+    get_playable_campaign_tracks,
+    postprocess_club_track_pbs,
+)
+from player import PLAYERS
+from tm_lookups import CLUBS
+from track import TRACKS
+
+
+def response_for(payload):
+    response = Mock()
+    response.text = json.dumps(payload)
+    return response
+
+
+def test_get_official_campaigns_maps_list_payload():
+    response = response_for(
+        {
+            "campaigns": [
+                {"id": 123, "name": "Summer 2026"},
+                {"campaignId": "456", "name": "Winter"},
+            ]
+        }
+    )
+
+    with patch("live_services.requests.get", return_value=response) as request:
+        campaigns = get_official_campaigns("jwt")
+
+    response.raise_for_status.assert_called_once_with()
+    request.assert_called_once_with(
+        f"{LIVE_SERVICES_URL}/api/token/campaigns/official",
+        headers={"Content-Type": "application/json", "Authorization": "nadeo_v1 t=jwt"},
+        params={"offset": 0, "length": 100},
+        timeout=30,
+    )
+    assert [(campaign.campaign_id, campaign.name) for campaign in campaigns] == [
+        ("123", "Summer 2026"),
+        ("456", "Winter"),
+    ]
+
+
+def test_get_official_campaigns_accepts_top_level_list():
+    response = response_for([{"id": "123", "name": "Summer 2026"}])
+
+    with patch("live_services.requests.get", return_value=response):
+        assert get_official_campaigns("jwt")[0].campaign_id == "123"
+
+
+def test_campaign_track_mapping_and_playable_selection():
+    maps = [
+        {"mapUid": f"uid-{number}", "name": f"Track {number}"}
+        for number in range(1, 20)
+    ]
+    response = response_for({"maps": maps})
+
+    with patch("live_services.requests.get", return_value=response) as request:
+        tracks = get_playable_campaign_tracks("campaign-1", "jwt")
+
+    request.assert_called_once_with(
+        f"{LIVE_SERVICES_URL}/api/token/campaign/campaign-1/maps",
+        headers={"Content-Type": "application/json", "Authorization": "nadeo_v1 t=jwt"},
+        timeout=30,
+    )
+    assert [track.number for track in tracks] == list(PLAYABLE_TRACK_NUMBERS)
+    assert [track.uid for track in tracks] == [
+        f"uid-{number}" for number in PLAYABLE_TRACK_NUMBERS
+    ]
+
+
+def test_campaign_tracks_accept_uid_and_top_level_list():
+    response = response_for([{"uid": "uid-1", "name": "Track 1"}])
+
+    with patch("live_services.requests.get", return_value=response):
+        tracks = get_campaign_tracks("campaign-1", "jwt")
+
+    assert tracks[0].uid == "uid-1"
+    assert tracks[0].number == 1
+
+
+def test_campaign_payload_and_missing_tracks_are_rejected():
+    invalid_response = response_for({"campaigns": ["invalid"]})
+    with (
+        patch("live_services.requests.get", return_value=invalid_response),
+        pytest.raises(ValueError, match="Every item"),
+    ):
+        get_official_campaigns("jwt")
+
+    tracks_response = response_for({"maps": [{"mapUid": "uid-1", "name": "Track 1"}]})
+    with (
+        patch("live_services.requests.get", return_value=tracks_response),
+        pytest.raises(ValueError, match="missing track numbers"),
+    ):
+        get_playable_campaign_tracks("campaign-1", "jwt")
+
+
+def test_requests_require_a_token():
+    with pytest.raises(ValueError, match="Missing"):
+        get_official_campaigns("")
+    with pytest.raises(ValueError, match="Missing"):
+        get_campaign_tracks("campaign-1", "")
+    with pytest.raises(ValueError, match="Missing"):
+        get_club_track_pbs(CLUBS["Elliot"], TRACKS[0], jwt_token=None)
+
+
+def test_club_track_processing_and_lookup_helpers():
+    raw = {
+        "mapUid": TRACKS[0].uid,
+        "length": 2,
+        "top": [
+            {"accountId": PLAYERS[0].account_id, "score": 60_000},
+            {"accountId": PLAYERS[1].account_id, "score": 61_000},
+        ],
+    }
+    response = response_for(raw)
+
+    with patch("live_services.requests.get", return_value=response) as request:
+        assert get_club_track_pbs(CLUBS["Elliot"], TRACKS[0], "group", "jwt") == raw
+
+    assert request.call_args.kwargs["headers"]["Authorization"] == "nadeo_v1 t=jwt"
+    processed = postprocess_club_track_pbs(raw)
+    assert processed["track"] is TRACKS[0]
+    assert processed["players"][1]["player"] is PLAYERS[1]
+    assert _get_track_by_uid(TRACKS[0].uid) is TRACKS[0]
+    assert _get_player_by_account_id(PLAYERS[0].account_id) is PLAYERS[0]
+
+    with pytest.raises(ValueError):
+        _get_track_by_uid("missing", tracks=[])
+    with pytest.raises(ValueError):
+        _get_player_by_account_id("missing", players=[])

@@ -2,5 +2,6 @@
 .env
 scratch.ipynb
 __pycache__/
+*.egg-info/
 
 development-docs/

@@ -1,6 +1,6 @@
 ---
 name: plan-implementation
-description: "Turn the ideas and requirements in development-docs/SKETCHBOOK.md into a concise, step-by-step implementation plan in development-docs/IMPLEMENTATION-PLAN.md for this Dockerized Python project. Use when planning a feature, refining a sketch, or preparing work for the implement-next skill."
+description: "Turn the ideas and requirements in development-docs/SKETCHBOOK.md into a concise, step-by-step implementation plan in development-docs/IMPLEMENTATION-PLAN.md for this Python project. Use when planning a feature, refining a sketch, or preparing work for the implement-next skill."
 argument-hint: "Optional feature focus"
 user-invocable: true
 ---
@@ -46,8 +46,7 @@ Do not discard requirements; transfer them into the plan first.
 
 ## Validation Planning
 
-- Write validation commands for the container, such as `docker compose run --rm app python -m pytest` or `docker compose run --rm app python -m compileall .`.
-- Never plan host-local Python commands for implementation or testing.
+- Write validation commands for the activated project virtual environment through uv, such as `uv run --active python -m pytest` or `uv run --active python -m compileall .`.
 
 ## Rules
 

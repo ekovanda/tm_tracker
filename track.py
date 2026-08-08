@@ -1,13 +1,13 @@
-from typing import Dict, List
 import math
 
 
 class Track:
-    def __init__(self, name: str, uid: str):
+    def __init__(self, name: str, uid: str, number: int | None = None):
         self.name = name
         self.uid = uid
+        self.number = number
 
-    def get_record(self, pbs: Dict):
+    def get_record(self, pbs: dict):
         """
         Sets self.record.
         """
@@ -24,7 +24,7 @@ class Track:
 
 
 # Manually obtained from: https://trackmania.io/#/campaigns/0/77963
-TRACKS: List[Track] = [
+TRACKS: list[Track] = [
     Track("Fall-01", "rw7jr8WlTrYor0vN0A0PiKzgg78"),
     Track("Fall-02", "tl_RqArUrUQ9KQDe0U5fskzdrpj"),
     Track("Fall-03", "6h3gOaF9HJBCnQbxtBopC_IMs10"),
