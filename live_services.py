@@ -47,14 +47,14 @@ def get_official_campaigns(jwt_token: str, length: int = 100) -> list[Campaign]:
     """Return official campaigns available to the authenticated user."""
 
     response = requests.get(
-        f"{LIVE_SERVICES_URL}/api/token/campaigns/official",
+        f"{LIVE_SERVICES_URL}/api/token/campaign/official",
         headers=_authorization_headers(jwt_token),
         params={"offset": 0, "length": length},
         timeout=REQUEST_TIMEOUT_SECONDS,
     )
     response.raise_for_status()
     payload = json.loads(response.text)
-    campaigns = _list_from_payload(payload, "campaigns")
+    campaigns = _list_from_payload(payload, "campaignList")
 
     return [
         Campaign(
@@ -68,23 +68,49 @@ def get_official_campaigns(jwt_token: str, length: int = 100) -> list[Campaign]:
 def get_campaign_tracks(campaign_id: str, jwt_token: str) -> list[Track]:
     """Return all maps in a campaign in their official campaign order."""
 
-    response = requests.get(
-        f"{LIVE_SERVICES_URL}/api/token/campaign/{campaign_id}/maps",
+    campaigns_response = requests.get(
+        f"{LIVE_SERVICES_URL}/api/token/campaign/official",
         headers=_authorization_headers(jwt_token),
+        params={"offset": 0, "length": 100},
         timeout=REQUEST_TIMEOUT_SECONDS,
     )
-    response.raise_for_status()
-    payload = json.loads(response.text)
-    maps = _list_from_payload(payload, "maps")
+    campaigns_response.raise_for_status()
+    campaigns_payload = json.loads(campaigns_response.text)
+    campaigns = _list_from_payload(campaigns_payload, "campaignList")
+    campaign = next(
+        (item for item in campaigns if str(item.get("id")) == str(campaign_id)),
+        None,
+    )
+    if campaign is None:
+        raise ValueError(f"Campaign not found: {campaign_id}")
 
-    return [
-        Track(
-            name=str(item["name"]),
-            uid=str(item.get("mapUid") or item["uid"]),
-            number=index + 1,
-        )
-        for index, item in enumerate(maps)
-    ]
+    playlist = campaign.get("playlist")
+    if not isinstance(playlist, list) or not all(
+        isinstance(item, dict) and item.get("mapUid") for item in playlist
+    ):
+        raise ValueError(f"Campaign has no valid playlist: {campaign_id}")
+
+    map_response = requests.get(
+        f"{LIVE_SERVICES_URL}/api/token/map/get-multiple",
+        headers=_authorization_headers(jwt_token),
+        params={"mapUidList": ",".join(item["mapUid"] for item in playlist)},
+        timeout=REQUEST_TIMEOUT_SECONDS,
+    )
+    map_response.raise_for_status()
+    maps = _list_from_payload(json.loads(map_response.text), "mapList")
+    maps_by_uid = {str(item["uid"]): item for item in maps}
+
+    try:
+        return [
+            Track(
+                name=str(maps_by_uid[item["mapUid"]]["name"]),
+                uid=str(item["mapUid"]),
+                number=index + 1,
+            )
+            for index, item in enumerate(playlist)
+        ]
+    except KeyError as error:
+        raise ValueError(f"Campaign map metadata is missing: {error}") from error
 
 
 def get_playable_campaign_tracks(campaign_id: str, jwt_token: str) -> list[Track]:

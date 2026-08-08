@@ -1,6 +1,9 @@
 import streamlit as st
 
-from authentication import get_nadeo_jwt_token, get_ubisoft_authentication_ticket
+from authentication import (
+    UbisoftAuthenticationError,
+    get_nadeo_service_token,
+)
 from streamlit_bingo_page import bingo_page
 from streamlit_player_focus_page import player_focus_page
 from streamlit_track_focus_page import track_focus_page
@@ -9,12 +12,12 @@ from streamlit_track_focus_page import track_focus_page
 def main():
 
     # Authentication
-    if "ubisoft_ticket" not in st.session_state:
-        st.session_state["ubisoft_ticket"] = get_ubisoft_authentication_ticket()
     if "nadeo_jwt_token" not in st.session_state:
-        st.session_state["nadeo_jwt_token"] = get_nadeo_jwt_token(
-            st.session_state["ubisoft_ticket"]
-        )
+        try:
+            st.session_state["nadeo_jwt_token"] = get_nadeo_service_token()
+        except UbisoftAuthenticationError as error:
+            st.error(str(error))
+            st.stop()
 
     # App Body
     st.title("Trackmania Tracker 🏆🏎")

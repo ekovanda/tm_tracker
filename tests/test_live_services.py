@@ -1,5 +1,5 @@
 import json
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 import pytest
 
@@ -28,7 +28,7 @@ def response_for(payload):
 def test_get_official_campaigns_maps_list_payload():
     response = response_for(
         {
-            "campaigns": [
+            "campaignList": [
                 {"id": 123, "name": "Summer 2026"},
                 {"campaignId": "456", "name": "Winter"},
             ]
@@ -40,7 +40,7 @@ def test_get_official_campaigns_maps_list_payload():
 
     response.raise_for_status.assert_called_once_with()
     request.assert_called_once_with(
-        f"{LIVE_SERVICES_URL}/api/token/campaigns/official",
+        f"{LIVE_SERVICES_URL}/api/token/campaign/official",
         headers={"Content-Type": "application/json", "Authorization": "nadeo_v1 t=jwt"},
         params={"offset": 0, "length": 100},
         timeout=30,
@@ -59,20 +59,44 @@ def test_get_official_campaigns_accepts_top_level_list():
 
 
 def test_campaign_track_mapping_and_playable_selection():
-    maps = [
-        {"mapUid": f"uid-{number}", "name": f"Track {number}"}
-        for number in range(1, 20)
+    playlist = [
+        {"mapUid": f"uid-{number}", "position": number - 1} for number in range(1, 20)
     ]
-    response = response_for({"maps": maps})
+    campaign_response = response_for([{"id": "campaign-1", "playlist": playlist}])
+    map_response = response_for(
+        {
+            "mapList": [
+                {"uid": f"uid-{number}", "name": f"Track {number}"}
+                for number in range(1, 20)
+            ]
+        }
+    )
 
-    with patch("live_services.requests.get", return_value=response) as request:
+    with patch(
+        "live_services.requests.get", side_effect=[campaign_response, map_response]
+    ) as request:
         tracks = get_playable_campaign_tracks("campaign-1", "jwt")
 
-    request.assert_called_once_with(
-        f"{LIVE_SERVICES_URL}/api/token/campaign/campaign-1/maps",
-        headers={"Content-Type": "application/json", "Authorization": "nadeo_v1 t=jwt"},
-        timeout=30,
-    )
+    assert request.call_args_list == [
+        call(
+            f"{LIVE_SERVICES_URL}/api/token/campaign/official",
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": "nadeo_v1 t=jwt",
+            },
+            params={"offset": 0, "length": 100},
+            timeout=30,
+        ),
+        call(
+            f"{LIVE_SERVICES_URL}/api/token/map/get-multiple",
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": "nadeo_v1 t=jwt",
+            },
+            params={"mapUidList": ",".join(f"uid-{number}" for number in range(1, 20))},
+            timeout=30,
+        ),
+    ]
     assert [track.number for track in tracks] == list(PLAYABLE_TRACK_NUMBERS)
     assert [track.uid for track in tracks] == [
         f"uid-{number}" for number in PLAYABLE_TRACK_NUMBERS
@@ -80,9 +104,14 @@ def test_campaign_track_mapping_and_playable_selection():
 
 
 def test_campaign_tracks_accept_uid_and_top_level_list():
-    response = response_for([{"uid": "uid-1", "name": "Track 1"}])
+    campaign_response = response_for(
+        [{"id": "campaign-1", "playlist": [{"mapUid": "uid-1"}]}]
+    )
+    map_response = response_for({"mapList": [{"uid": "uid-1", "name": "Track 1"}]})
 
-    with patch("live_services.requests.get", return_value=response):
+    with patch(
+        "live_services.requests.get", side_effect=[campaign_response, map_response]
+    ):
         tracks = get_campaign_tracks("campaign-1", "jwt")
 
     assert tracks[0].uid == "uid-1"
@@ -90,16 +119,22 @@ def test_campaign_tracks_accept_uid_and_top_level_list():
 
 
 def test_campaign_payload_and_missing_tracks_are_rejected():
-    invalid_response = response_for({"campaigns": ["invalid"]})
+    invalid_response = response_for({"campaignList": ["invalid"]})
     with (
         patch("live_services.requests.get", return_value=invalid_response),
         pytest.raises(ValueError, match="Every item"),
     ):
         get_official_campaigns("jwt")
 
-    tracks_response = response_for({"maps": [{"mapUid": "uid-1", "name": "Track 1"}]})
+    tracks_response = response_for(
+        [{"id": "campaign-1", "playlist": [{"mapUid": "uid-1"}]}]
+    )
+    map_response = response_for({"mapList": [{"uid": "uid-1", "name": "Track 1"}]})
     with (
-        patch("live_services.requests.get", return_value=tracks_response),
+        patch(
+            "live_services.requests.get",
+            side_effect=[tracks_response, map_response],
+        ),
         pytest.raises(ValueError, match="missing track numbers"),
     ):
         get_playable_campaign_tracks("campaign-1", "jwt")
