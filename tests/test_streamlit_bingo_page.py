@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import streamlit_bingo_page as bingo_page_module
 from bingo import (
@@ -15,6 +15,7 @@ from streamlit_bingo_page import (
     _render_board,
     _render_cell,
     _render_records,
+    _run_live_request,
     bingo_page,
     display_deadline,
     display_manual_timer,
@@ -36,6 +37,34 @@ def test_poll_is_due_handles_initial_and_one_minute_windows():
     assert poll_is_due(None, now)
     assert not poll_is_due(now, now + timedelta(seconds=59))
     assert poll_is_due(now, now + timedelta(minutes=1))
+
+
+def test_live_request_retries_once_after_unauthorized_response():
+    fake_st = FakeStreamlit()
+    unauthorized = Mock(status_code=401)
+    error = bingo_page_module.requests.HTTPError(response=unauthorized)
+    operation = Mock(side_effect=[error, "success"])
+
+    with (
+        patch.object(bingo_page_module, "st", fake_st),
+        patch.object(
+            bingo_page_module,
+            "refresh_nadeo_service_token",
+            return_value={"accessToken": "refreshed", "refreshToken": "new"},
+        ) as refresh,
+    ):
+        result = _run_live_request(operation, datetime(2026, 1, 1, tzinfo=UTC))
+
+    assert result == "success"
+    assert [call.args[0] for call in operation.call_args_list] == [
+        "jwt",
+        "refreshed",
+    ]
+    refresh.assert_called_once_with("refresh")
+    assert fake_st.session_state["nadeo_jwt_token"] == {
+        "accessToken": "refreshed",
+        "refreshToken": "new",
+    }
 
 
 def test_timer_refreshes_every_second_without_shortening_poll_window():
@@ -166,7 +195,9 @@ class FakeStreamlit:
     def __init__(
         self, button_results=None, number_input_values=None, selectbox_values=None
     ):
-        self.session_state = {"nadeo_jwt_token": {"accessToken": "jwt"}}
+        self.session_state = {
+            "nadeo_jwt_token": {"accessToken": "jwt", "refreshToken": "refresh"}
+        }
         self.markdown_calls = []
         self.caption_calls = []
         self.info_calls = []

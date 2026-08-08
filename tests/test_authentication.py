@@ -1,5 +1,6 @@
 import base64
 import json
+from datetime import UTC, datetime, timedelta
 from unittest.mock import Mock, patch
 
 import pytest
@@ -9,10 +10,12 @@ from authentication import (
     UbisoftAuthenticationError,
     decode_jwt_payload,
     encode_basic_auth,
+    ensure_nadeo_service_token,
     get_nadeo_jwt_token,
     get_nadeo_service_token,
     get_ubisoft_authentication_ticket,
     get_user_agent,
+    refresh_nadeo_service_token,
 )
 
 
@@ -22,6 +25,15 @@ def response_for(payload, status_code=200):
     response.status_code = status_code
     response.raise_for_status.return_value = None
     return response
+
+
+def jwt_for(expiry: int) -> str:
+    payload = (
+        base64.urlsafe_b64encode(json.dumps({"exp": expiry}).encode())
+        .decode()
+        .rstrip("=")
+    )
+    return f"header.{payload}.signature"
 
 
 def test_ubisoft_ticket_requires_basic_auth():
@@ -90,14 +102,20 @@ def test_nadeo_token_and_jwt_helpers():
 
 
 def test_nadeo_service_token_uses_basic_auth_and_live_audience():
-    response = response_for({"accessToken": "access", "refreshToken": "refresh"})
+    response = response_for(
+        {
+            "accessToken": jwt_for(1_800_000_000),
+            "refreshToken": "refresh",
+        }
+    )
     with (
         patch.object(authentication, "EMAIL", "test@example.com"),
         patch("authentication.requests.post", return_value=response) as request,
     ):
         assert get_nadeo_service_token("Basic service-credentials") == {
-            "accessToken": "access",
+            "accessToken": jwt_for(1_800_000_000),
             "refreshToken": "refresh",
+            "accessTokenExpiresAt": 1_800_000_000,
         }
 
     request.assert_called_once_with(
@@ -139,3 +157,51 @@ def test_nadeo_service_token_rejects_missing_or_invalid_responses():
         pytest.raises(UbisoftAuthenticationError, match="no access token"),
     ):
         get_nadeo_service_token("Basic credentials")
+
+
+def test_refresh_replaces_tokens_and_retains_expiry_metadata():
+    response = response_for(
+        {
+            "accessToken": jwt_for(1_800_000_000),
+            "refreshToken": "new-refresh",
+        }
+    )
+
+    with patch("authentication.requests.post", return_value=response) as request:
+        refreshed = refresh_nadeo_service_token("old-refresh")
+
+    request.assert_called_once_with(
+        "https://prod.trackmania.core.nadeo.online/v2/authentication/token/refresh",
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": "nadeo_v1 t=old-refresh",
+            "User-Agent": get_user_agent(),
+        },
+        timeout=30,
+    )
+    assert refreshed == {
+        "accessToken": jwt_for(1_800_000_000),
+        "refreshToken": "new-refresh",
+        "accessTokenExpiresAt": 1_800_000_000,
+    }
+
+
+def test_ensure_token_refreshes_near_expiry_but_keeps_valid_token():
+    valid = {
+        "accessToken": jwt_for(1_800_100_000),
+        "refreshToken": "refresh",
+    }
+    now = datetime.fromtimestamp(1_800_000_000, UTC)
+
+    with patch(
+        "authentication.refresh_nadeo_service_token",
+        return_value={"accessToken": "new", "refreshToken": "new-refresh"},
+    ) as refresh:
+        assert ensure_nadeo_service_token(valid, now) is valid
+        assert ensure_nadeo_service_token(
+            {"accessToken": jwt_for(1_800_000_100), "refreshToken": "refresh"},
+            now,
+            refresh_skew=timedelta(minutes=5),
+        ) == {"accessToken": "new", "refreshToken": "new-refresh"}
+
+    refresh.assert_called_once_with("refresh")

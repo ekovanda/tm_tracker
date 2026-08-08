@@ -148,6 +148,7 @@ def get_club_track_pbs(
 
     # Note that this is a get request
     club_track_pbs = requests.get(url, headers=headers, timeout=REQUEST_TIMEOUT_SECONDS)
+    club_track_pbs.raise_for_status()
     return json.loads(club_track_pbs.text)
 
 

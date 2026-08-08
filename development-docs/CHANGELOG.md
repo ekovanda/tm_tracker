@@ -14,6 +14,7 @@ All notable changes to this project are documented here.
 
 ### Fixed
 
+- 2026-08-08T17:03:24Z: Added service-token expiry tracking, refresh-before-expiry, and one-time recovery after an expired Live API authorization. A commit ID is not applicable before the resulting commit exists.
 - Updated authentication to use Nadeo service accounts and documented Live API campaign and map endpoints.
 - Fixed the project packaging and type-check configuration so the normal pre-commit hooks can run without bypassing verification.
 - Fixed legacy lint findings in shared API and utility modules.

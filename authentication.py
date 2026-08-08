@@ -1,6 +1,7 @@
 import base64
 import json
 import os
+from datetime import UTC, datetime, timedelta
 
 import requests
 from dotenv import load_dotenv
@@ -13,6 +14,11 @@ EMAIL = os.getenv("EMAIL")
 PROJECT_NAME = os.getenv("PROJECT_NAME", "Eljay's TM Tracker")
 MAINTAINER_HANDLE = os.getenv("MAINTAINER_HANDLE", "Eljay")
 REQUEST_TIMEOUT_SECONDS = 30
+TOKEN_REFRESH_URL = (
+    "https://prod.trackmania.core.nadeo.online/v2/authentication/token/refresh"
+)
+ACCESS_TOKEN_EXPIRY_KEY = "accessTokenExpiresAt"
+TOKEN_REFRESH_SKEW = timedelta(minutes=5)
 
 
 class UbisoftAuthenticationError(RuntimeError):
@@ -141,7 +147,85 @@ def get_nadeo_service_token(basic_auth: str | None = None) -> dict:
             "Nadeo authentication returned no access token. Check BASIC_AUTH."
         )
 
-    return payload
+    return _with_access_token_expiry(payload)
+
+
+def refresh_nadeo_service_token(refresh_token: str) -> dict:
+    """Replace an expiring Nadeo access/refresh token pair."""
+
+    if not refresh_token:
+        raise UbisoftAuthenticationError("Missing Nadeo refresh token.")
+
+    response = requests.post(
+        TOKEN_REFRESH_URL,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"nadeo_v1 t={refresh_token}",
+            "User-Agent": get_user_agent(),
+        },
+        timeout=REQUEST_TIMEOUT_SECONDS,
+    )
+    try:
+        response.raise_for_status()
+    except requests.HTTPError as error:
+        raise UbisoftAuthenticationError("Nadeo token refresh failed.") from error
+
+    try:
+        payload = json.loads(response.text)
+    except json.JSONDecodeError as error:
+        raise UbisoftAuthenticationError(
+            "Nadeo returned an invalid token refresh response."
+        ) from error
+
+    if not isinstance(payload, dict) or not payload.get("accessToken"):
+        raise UbisoftAuthenticationError(
+            "Nadeo token refresh returned no access token."
+        )
+    if not payload.get("refreshToken"):
+        raise UbisoftAuthenticationError(
+            "Nadeo token refresh returned no refresh token."
+        )
+
+    return _with_access_token_expiry(payload)
+
+
+def ensure_nadeo_service_token(
+    token: object,
+    now: datetime | None = None,
+    refresh_skew: timedelta = TOKEN_REFRESH_SKEW,
+) -> object:
+    """Refresh a service token when its access token is near expiry."""
+
+    if not isinstance(token, dict) or not token.get("accessToken"):
+        return token
+
+    expires_at = token.get(ACCESS_TOKEN_EXPIRY_KEY)
+    if not isinstance(expires_at, int):
+        expires_at = _access_token_expiry(token["accessToken"])
+    if expires_at is None:
+        return token
+
+    current_time = now or datetime.now(UTC)
+    if current_time.timestamp() + refresh_skew.total_seconds() < expires_at:
+        return token
+
+    return refresh_nadeo_service_token(str(token.get("refreshToken", "")))
+
+
+def _with_access_token_expiry(payload: dict) -> dict:
+    token = dict(payload)
+    expires_at = _access_token_expiry(str(token["accessToken"]))
+    if expires_at is not None:
+        token[ACCESS_TOKEN_EXPIRY_KEY] = expires_at
+    return token
+
+
+def _access_token_expiry(access_token: str) -> int | None:
+    try:
+        expiry = decode_jwt_payload(access_token).get("exp")
+    except (ValueError, KeyError, json.JSONDecodeError, UnicodeDecodeError):
+        return None
+    return int(expiry) if isinstance(expiry, (int, float)) else None
 
 
 # Convenience functions

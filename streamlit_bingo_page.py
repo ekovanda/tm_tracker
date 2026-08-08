@@ -5,8 +5,13 @@ from datetime import UTC, datetime, timedelta
 from html import escape
 from typing import cast
 
+import requests
 import streamlit as st
 
+from authentication import (
+    ensure_nadeo_service_token,
+    refresh_nadeo_service_token,
+)
 from bingo import (
     GAME_DURATION,
     GRACE_PERIOD,
@@ -148,9 +153,35 @@ def grace_period_progress(state, now: datetime) -> float:
     )
 
 
-def _access_token() -> str:
+def _access_token(now: datetime | None = None) -> str:
+    token = ensure_nadeo_service_token(st.session_state["nadeo_jwt_token"], now)
+    st.session_state["nadeo_jwt_token"] = token
+    if isinstance(token, dict) and isinstance(token.get("accessToken"), str):
+        return token["accessToken"]
+    if isinstance(token, str):
+        return token
+    raise TypeError("The current token has no access token value.")
+
+
+def _refresh_access_token() -> str:
     token = st.session_state["nadeo_jwt_token"]
-    return token["accessToken"] if isinstance(token, dict) else token
+    if not isinstance(token, dict):
+        raise TypeError("The current token cannot be refreshed.")
+    refreshed = refresh_nadeo_service_token(str(token.get("refreshToken", "")))
+    st.session_state["nadeo_jwt_token"] = refreshed
+    return str(refreshed["accessToken"])
+
+
+def _run_live_request(operation, now: datetime):
+    """Run one idempotent request and retry it once after an authorization failure."""
+
+    try:
+        return operation(_access_token(now))
+    except requests.HTTPError as error:
+        response = error.response
+        if response is None or response.status_code != 401:
+            raise
+        return operation(_refresh_access_token())
 
 
 def _typed_session_state() -> MutableMapping[str, object]:
@@ -159,7 +190,9 @@ def _typed_session_state() -> MutableMapping[str, object]:
 
 def _campaigns() -> list[Campaign]:
     if CAMPAIGNS_KEY not in st.session_state:
-        st.session_state[CAMPAIGNS_KEY] = get_official_campaigns(_access_token())
+        st.session_state[CAMPAIGNS_KEY] = _run_live_request(
+            get_official_campaigns, datetime.now(UTC)
+        )
     return st.session_state[CAMPAIGNS_KEY]
 
 
@@ -383,8 +416,9 @@ def _render_active_session_content() -> None:
     last_polled_at = st.session_state.get(LAST_POLLED_KEY)
     if refresh_clicked or poll_is_due(last_polled_at, now):
         with st.spinner("Refreshing rankings..."):
-            active_session = poll_session_in_state(
-                _typed_session_state(), _access_token(), now
+            active_session = _run_live_request(
+                lambda token: poll_session_in_state(_typed_session_state(), token, now),
+                now,
             )
         st.session_state[LAST_POLLED_KEY] = now
 
@@ -491,8 +525,11 @@ def bingo_page() -> None:
         campaign_id, settings = setup
         now = datetime.now(UTC)
         reset_manual_timers()
-        start_session_in_state(
-            _typed_session_state(), campaign_id, _access_token(), now, settings=settings
+        _run_live_request(
+            lambda token: start_session_in_state(
+                _typed_session_state(), campaign_id, token, now, settings=settings
+            ),
+            now,
         )
         st.session_state[LAST_POLLED_KEY] = None
         st.rerun()

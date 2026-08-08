@@ -170,6 +170,7 @@ def test_club_track_processing_and_lookup_helpers():
     with patch("live_services.requests.get", return_value=response) as request:
         assert get_club_track_pbs(CLUBS["Elliot"], TRACKS[0], "group", "jwt") == raw
 
+    response.raise_for_status.assert_called_once_with()
     assert request.call_args.kwargs["headers"]["Authorization"] == "nadeo_v1 t=jwt"
     processed = postprocess_club_track_pbs(raw)
     assert processed["track"] is TRACKS[0]
