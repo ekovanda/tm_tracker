@@ -1,0 +1,10 @@
+services:
+  app:
+    build:
+      context: .
+    working_dir: /app
+    volumes:
+      - .:/app
+    ports:
+      - "8501:8501"
+    command: ["streamlit", "run", "streamlit_app.py", "--server.address=0.0.0.0"]

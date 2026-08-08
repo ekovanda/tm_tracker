@@ -4,3 +4,9 @@ streamlit
 
 # Dev Specific
 ipykernel
+pytest
+pytest-cov
+pre-commit
+ruff
+pylint
+mypy

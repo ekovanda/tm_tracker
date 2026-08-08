@@ -1,0 +1,26 @@
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-format
+        name: ruff format
+        entry: docker compose run --rm app ruff format
+        language: system
+        types: [python]
+
+      - id: ruff-check
+        name: ruff lint
+        entry: docker compose run --rm app ruff check
+        language: system
+        types: [python]
+
+      - id: pylint
+        name: pylint
+        entry: docker compose run --rm app pylint
+        language: system
+        types: [python]
+
+      - id: mypy
+        name: mypy
+        entry: docker compose run --rm app mypy
+        language: system
+        types: [python]
