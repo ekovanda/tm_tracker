@@ -2,7 +2,7 @@
 
 import time
 from collections.abc import Callable, Iterable, MutableMapping
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from threading import Condition, Lock
 
@@ -128,6 +128,87 @@ class BingoSession:
     state: BingoState
     records: tuple[RecordEntry, ...] = ()
     seen_records: frozenset[tuple[str, str, int]] = frozenset()
+
+
+@dataclass(frozen=True)
+class PendingGame:
+    """Shared configuration awaiting the start of the canonical game."""
+
+    campaign_id: str | None = None
+    settings: BingoSettings = field(default_factory=BingoSettings)
+
+
+@dataclass(frozen=True)
+class CanonicalGameState:
+    """The single pending or started game visible to every viewer."""
+
+    pending: PendingGame = PendingGame()
+    session: BingoSession | None = None
+
+
+class CanonicalGameAlreadyStartedError(RuntimeError):
+    """Raised when an operation would replace the current canonical game."""
+
+
+class CanonicalGameNotStartedError(RuntimeError):
+    """Raised when an active canonical game is required but absent."""
+
+
+class CanonicalGameStore:
+    """Thread-safe in-memory boundary for the one canonical Bingo game."""
+
+    def __init__(self) -> None:
+        self._state = CanonicalGameState()
+        self._lock = Lock()
+
+    def get(self) -> CanonicalGameState:
+        """Return the current immutable game snapshot."""
+
+        with self._lock:
+            return self._state
+
+    def configure(self, pending: PendingGame) -> CanonicalGameState:
+        """Update pending configuration until the game is started."""
+
+        with self._lock:
+            if self._state.session is not None:
+                raise CanonicalGameAlreadyStartedError(
+                    "The canonical Bingo game has already started."
+                )
+            self._state = replace(self._state, pending=pending)
+            return self._state
+
+    def start(self, session: BingoSession) -> CanonicalGameState:
+        """Atomically establish the first active session for all viewers."""
+
+        if session.state.status != "active":
+            raise ValueError("The canonical Bingo game must start as active.")
+        with self._lock:
+            if self._state.session is not None:
+                raise CanonicalGameAlreadyStartedError(
+                    "The canonical Bingo game has already started."
+                )
+            self._state = replace(self._state, session=session)
+            return self._state
+
+    def stop(self) -> CanonicalGameState:
+        """Stop the canonical game without removing its final state."""
+
+        with self._lock:
+            session = self._state.session
+            if session is None:
+                raise CanonicalGameNotStartedError(
+                    "No canonical Bingo game has started."
+                )
+            self._state = replace(self._state, session=stop_session(session))
+            return self._state
+
+    def reset(self) -> CanonicalGameState:
+        """Return to pending setup while retaining the shared configuration."""
+
+        with self._lock:
+            self._state = replace(self._state, session=None)
+            return self._state
 
 
 @dataclass(frozen=True)

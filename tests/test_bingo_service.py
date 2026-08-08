@@ -10,7 +10,11 @@ from bingo_service import (
     REQUEST_DELAY_SECONDS,
     SESSION_KEY,
     BingoSession,
+    CanonicalGameAlreadyStartedError,
+    CanonicalGameNotStartedError,
+    CanonicalGameStore,
     ManualTimerStore,
+    PendingGame,
     PollingCoordinator,
     PollSettings,
     get_manual_timers,
@@ -84,6 +88,87 @@ def test_start_session_preserves_custom_timing_settings():
 def test_start_session_rejects_incomplete_campaign():
     with pytest.raises(ValueError, match="exactly 16"):
         start_session("campaign", "jwt", START, lambda *_: make_tracks()[:-1])
+
+
+def test_canonical_game_store_shares_pending_configuration():
+    store = CanonicalGameStore()
+    pending = PendingGame(
+        "campaign",
+        BingoSettings(game_duration=timedelta(hours=2), board_seed=7),
+    )
+
+    configured = store.configure(pending)
+
+    assert configured == store.get()
+    assert configured.pending == pending
+    assert configured.session is None
+
+
+def test_canonical_game_store_rejects_invalid_or_conflicting_starts():
+    store = CanonicalGameStore()
+    stopped_session = stop_session(
+        start_session("campaign", "jwt", START, make_loader())
+    )
+
+    with pytest.raises(ValueError, match="must start as active"):
+        store.start(stopped_session)
+
+    started_session = start_session("campaign", "jwt", START, make_loader())
+    store.start(started_session)
+
+    with pytest.raises(CanonicalGameAlreadyStartedError):
+        store.start(start_session("campaign", "jwt", START, make_loader()))
+    with pytest.raises(CanonicalGameAlreadyStartedError):
+        store.configure(PendingGame("other-campaign"))
+
+
+def test_canonical_game_store_stops_and_resets_without_losing_pending_config():
+    store = CanonicalGameStore()
+    pending = PendingGame("campaign", BingoSettings(board_seed=3))
+    store.configure(pending)
+
+    with pytest.raises(CanonicalGameNotStartedError):
+        store.stop()
+
+    session = start_session("campaign", "jwt", START, make_loader(), pending.settings)
+    stopped = store.start(session)
+    assert stopped.session is session
+
+    stopped = store.stop()
+    assert stopped.session is not None
+    assert stopped.session.state.status == "stopped"
+
+    reset = store.reset()
+    assert reset.session is None
+    assert reset.pending == pending
+
+
+def test_canonical_game_store_allows_only_one_concurrent_start():
+    store = CanonicalGameStore()
+    sessions = [
+        start_session("campaign", "jwt", START, make_loader()),
+        start_session("campaign", "jwt", START, make_loader()),
+    ]
+    barrier = Event()
+    outcomes = []
+
+    def attempt_start(session):
+        barrier.wait(timeout=2)
+        try:
+            outcomes.append(store.start(session))
+        except CanonicalGameAlreadyStartedError:
+            outcomes.append(None)
+
+    threads = [Thread(target=attempt_start, args=(session,)) for session in sessions]
+    for thread in threads:
+        thread.start()
+    barrier.set()
+    for thread in threads:
+        thread.join(timeout=2)
+
+    assert len(outcomes) == 2
+    assert sum(outcome is not None for outcome in outcomes) == 1
+    assert store.get().session in sessions
 
 
 def test_poll_logs_only_new_records_and_updates_bingo_state():

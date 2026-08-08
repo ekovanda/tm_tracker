@@ -8,7 +8,7 @@ The application is a Python 3.13 Streamlit app with a small functional domain la
 
 - `streamlit_app.py` configures the wide Streamlit page, gates access with the configured app password, authenticates, displays the packaged version, and calls the page renderer.
 - `streamlit_bingo_page.py` owns Streamlit rendering, session controls, timer controls, and the one-second UI fragment refresh.
-- `bingo_service.py` orchestrates campaign/session loading, leaderboard polling, record de-duplication, and process-wide timer storage.
+- `bingo_service.py` orchestrates campaign/session loading, leaderboard polling, record de-duplication, and process-wide timer storage. It also defines the thread-safe `CanonicalGameStore` boundary for the single shared game's pending configuration and immutable session snapshots.
 - `bingo.py` contains immutable Bingo state models and pure transitions for board ranking, line detection, session expiry, and manual timer transitions.
 - `live_services.py` is the Nadeo Live Services adapter for campaigns, maps, and club leaderboard data.
 - `authentication.py` handles Ubisoft/Nadeo tokens and constructs the identifying `User-Agent` header.
@@ -33,6 +33,8 @@ There are two deliberately different state scopes:
 - `BingoSession` is stored in Streamlit session state. It contains the selected campaign, tracks, Bingo board state, record history, and de-duplication keys for one browser session.
 - `BingoState.settings` stores immutable per-session settings, including the board seed, overall session duration, opening grace period, and player timer duration.
 - `SHARED_MANUAL_TIMER` is a process-wide, thread-safe `ManualTimerStore`. It keeps one `ManualTimerState` per configured player so multiple viewers see the same player timer state.
+
+The canonical-game work introduces `PendingGame`, `CanonicalGameState`, and the locked `CanonicalGameStore` in `bingo_service.py`. The store models one pending configuration or one started/stopped `BingoSession`, rejects configuration changes after start, and atomically enforces first-start-wins. The current Streamlit wiring still uses browser session state; later implementation steps will migrate that wiring to this shared boundary and add durable Streamlit Cloud storage.
 
 Do not move timer state into browser-local widget state when changing the timer. The process-wide store is the synchronization boundary for connected viewers. `ManualTimerStore.get_all` updates all states while holding one lock and must not call its lock-acquiring `get` method from inside that lock.
 
