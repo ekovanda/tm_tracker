@@ -202,7 +202,8 @@ def _campaigns() -> list[Campaign]:
 def _render_cell(ranking) -> None:
     owner = ranking.owner
     owner_name = owner.alias if owner else "Unclaimed"
-    color, text_color = track_colors(ranking.track.number)
+    color = owner_color(owner)
+    text_color = owner_text_color(owner)
     st.markdown(
         f"""
         <div style="background: {color}; border-radius: 6px; color: {text_color};

@@ -294,6 +294,22 @@ def test_setup_and_board_rendering_use_streamlit_controls():
     assert "Track 1" not in fake_st.markdown_calls[0]
 
 
+def test_active_board_cells_use_owner_colors_or_neutral_grey():
+    fake_st = FakeStreamlit()
+    track = Track("Track 1", "uid-1", 1)
+    unclaimed = TrackRanking(track, (), None, None)
+    claimed = TrackRanking(track, (), PLAYERS[0], 1_250)
+
+    with patch.object(bingo_page_module, "st", fake_st):
+        _render_cell(unclaimed)
+        _render_cell(claimed)
+
+    assert "background: #6b7280" in fake_st.markdown_calls[0]
+    assert "Unclaimed" in fake_st.markdown_calls[0]
+    assert f"background: {owner_color(PLAYERS[0])}" in fake_st.markdown_calls[1]
+    assert PLAYERS[0].alias in fake_st.markdown_calls[1]
+
+
 def test_track_colors_follow_four_campaign_series():
     assert [track_colors(number) for number in (1, 6, 11, 16)] == [
         ("#d1d5db", "#111827"),
