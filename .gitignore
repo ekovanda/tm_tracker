@@ -2,3 +2,5 @@
 .env
 scratch.ipynb
 __pycache__/
+
+development-docs/

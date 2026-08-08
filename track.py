@@ -1,6 +1,7 @@
 from typing import Dict, List
 import math
 
+
 class Track:
     def __init__(self, name: str, uid: str):
         self.name = name
@@ -18,9 +19,11 @@ class Track:
         self.record = {
             "time": pbs["players"][0]["pb"],
             "player": pbs["players"][0]["player"],
-            "lead": lead}
+            "lead": lead,
+        }
 
-# Manually obtained from: https://trackmania.io/#/campaigns/0/77963 
+
+# Manually obtained from: https://trackmania.io/#/campaigns/0/77963
 TRACKS: List[Track] = [
     Track("Fall-01", "rw7jr8WlTrYor0vN0A0PiKzgg78"),
     Track("Fall-02", "tl_RqArUrUQ9KQDe0U5fskzdrpj"),
@@ -47,4 +50,4 @@ TRACKS: List[Track] = [
     Track("Fall-23", "WxCghen5pI7lbDKigtekKq0Uut3"),
     Track("Fall-24", "9fEY2mqkUY50nhtj9c0NXWax5xk"),
     Track("Fall-25", "End5ikYJa8pgN8RI347E6l4i7lg"),
-    ]
+]

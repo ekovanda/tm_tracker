@@ -15,5 +15,6 @@ class Club:
     owner_alias: Optional[str]
 
 
-CLUBS: List[Club] = {"Elliot": Club("85915", "7e468ff6-4558-43ce-ad23-591dd86291c0", "Elliot")} 
-
+CLUBS: List[Club] = {
+    "Elliot": Club("85915", "7e468ff6-4558-43ce-ad23-591dd86291c0", "Elliot")
+}
