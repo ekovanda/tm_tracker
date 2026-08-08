@@ -31,13 +31,13 @@ from bingo_service import (
     get_canonical_game_store,
     get_manual_timers,
     poll_session_in_state,
+    reset_canonical_game,
     reset_manual_timers,
-    reset_session,
     restart_manual_timer_for_player,
-    start_session_in_state,
+    start_canonical_game,
+    stop_canonical_game,
     stop_manual_timer_for_player,
     stop_manual_timers,
-    stop_session_in_state,
 )
 from live_services import Campaign, LiveServiceError, get_official_campaigns
 from player import PLAYERS, Player
@@ -191,6 +191,17 @@ def _run_live_request(operation, now: datetime):
 
 def _typed_session_state() -> MutableMapping[str, object]:
     return cast(MutableMapping[str, object], st.session_state)
+
+
+def _sync_canonical_session_to_state() -> BingoSession | None:
+    """Mirror the canonical session into local state for current render helpers."""
+
+    session = get_canonical_game_store().get().session
+    if session is None:
+        st.session_state.pop(SESSION_KEY, None)
+    else:
+        st.session_state[SESSION_KEY] = session
+    return session
 
 
 def _campaigns() -> list[Campaign]:
@@ -541,7 +552,7 @@ def bingo_page() -> None:
         st.warning("No official campaigns are available.")
         return
 
-    active_session = st.session_state.get(SESSION_KEY)
+    active_session = _sync_canonical_session_to_state()
     if not isinstance(active_session, BingoSession):
         setup = _render_session_settings(campaigns)
         if setup is None:
@@ -551,8 +562,8 @@ def bingo_page() -> None:
         now = datetime.now(UTC)
         reset_manual_timers()
         _run_live_request(
-            lambda token: start_session_in_state(
-                _typed_session_state(), campaign_id, token, now, settings=settings
+            lambda token: start_canonical_game(
+                campaign_id, token, now, settings=settings
             ),
             now,
         )
@@ -578,16 +589,16 @@ def bingo_page() -> None:
         )
 
     if stop_clicked:
-        stop_session_in_state(_typed_session_state())
+        stop_canonical_game()
         stop_manual_timers()
         st.rerun()
     if reset_clicked:
-        reset_session(_typed_session_state())
+        reset_canonical_game()
         reset_manual_timers()
         st.session_state.pop(LAST_POLLED_KEY, None)
         st.rerun()
 
-    active_session = st.session_state.get(SESSION_KEY)
+    active_session = _sync_canonical_session_to_state()
     if not isinstance(active_session, BingoSession):
         st.info("Choose an official campaign and start a bingo session.")
         return

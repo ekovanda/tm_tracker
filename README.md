@@ -50,7 +50,7 @@ The application also accepts optional `PROJECT_NAME`, `MAINTAINER_HANDLE`, and `
 uv run --active streamlit run streamlit_app.py
 ```
 
-Open the local URL printed by Streamlit. The app displays its packaged version beneath the title. The pre-session settings page shows a color-coded 4x4 board preview with track values. Setup configuration and `Shuffle board` changes are shared across connected viewers while the app process is running, so any participating player can prepare the pending game. Every row and column contains one light-grey, green, blue, and red track. Once started, the settings page is replaced by the live board, session status, records, leaderboard refresh status, and three player timers. A process restart clears the pending in-memory setup and requires a fresh configuration.
+Open the local URL printed by Streamlit. The app displays its packaged version beneath the title. The pre-session settings page shows a color-coded 4x4 board preview with track values. Setup configuration and `Shuffle board` changes are shared across connected viewers while the app process is running, so any participating player can prepare the pending game. Every row and column contains one light-grey, green, blue, and red track. The first player to start establishes the shared game; stop and reset actions apply to that same game for all viewers. Once started, the settings page is replaced by the live board, session status, records, leaderboard refresh status, and three player timers. A process restart clears the pending in-memory setup and requires a fresh configuration.
 
 ## Development Checks
 

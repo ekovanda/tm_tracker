@@ -188,7 +188,10 @@ class CanonicalGameStore:
                 raise CanonicalGameAlreadyStartedError(
                     "The canonical Bingo game has already started."
                 )
-            self._state = replace(self._state, session=session)
+            self._state = CanonicalGameState(
+                PendingGame(session.campaign_id, session.state.settings),
+                session,
+            )
             return self._state
 
     def stop(self) -> CanonicalGameState:
@@ -368,6 +371,31 @@ def start_session(
     if len(tracks) != 16:
         raise ValueError("A bingo session requires exactly 16 campaign tracks.")
     return BingoSession(campaign_id, tracks, start_bingo(started_at, settings))
+
+
+def start_canonical_game(
+    campaign_id: str,
+    jwt_token: str,
+    started_at: datetime,
+    track_loader: TrackLoader | None = None,
+    settings: BingoSettings | None = None,
+) -> CanonicalGameState:
+    """Load and atomically publish the one active game for all viewers."""
+
+    session = start_session(campaign_id, jwt_token, started_at, track_loader, settings)
+    return SHARED_CANONICAL_GAME.start(session)
+
+
+def stop_canonical_game() -> CanonicalGameState:
+    """Stop the shared game while retaining its final snapshot."""
+
+    return SHARED_CANONICAL_GAME.stop()
+
+
+def reset_canonical_game() -> CanonicalGameState:
+    """Return the shared game to pending setup."""
+
+    return SHARED_CANONICAL_GAME.reset()
 
 
 def _live_record_loader(track: Track, jwt_token: str) -> ProcessedRecord:

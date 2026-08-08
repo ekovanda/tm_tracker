@@ -21,10 +21,13 @@ from bingo_service import (
     get_manual_timers,
     poll_session,
     poll_session_in_state,
+    reset_canonical_game,
     reset_session,
     restart_manual_timer_for_player,
+    start_canonical_game,
     start_session,
     start_session_in_state,
+    stop_canonical_game,
     stop_manual_timer_for_player,
     stop_session,
     stop_session_in_state,
@@ -127,6 +130,29 @@ def test_canonical_game_store_rejects_invalid_or_conflicting_starts():
         store.start(start_session("campaign", "jwt", START, make_loader()))
     with pytest.raises(CanonicalGameAlreadyStartedError):
         store.configure(PendingGame("other-campaign"))
+
+
+def test_canonical_lifecycle_helpers_publish_and_clear_shared_game():
+    started = start_canonical_game(
+        "campaign",
+        "jwt",
+        START,
+        make_loader(),
+        BingoSettings(board_seed=5),
+    )
+
+    assert started.session is not None
+    assert started.session.campaign_id == "campaign"
+    assert started.pending.settings.board_seed == 5
+    assert get_canonical_game_store().get() is started
+
+    stopped = stop_canonical_game()
+    assert stopped.session is not None
+    assert stopped.session.state.status == "stopped"
+
+    reset = reset_canonical_game()
+    assert reset.session is None
+    assert reset.pending.settings.board_seed == 5
 
 
 def test_canonical_game_store_stops_and_resets_without_losing_pending_config():

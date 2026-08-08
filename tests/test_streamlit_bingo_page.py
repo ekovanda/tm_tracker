@@ -344,6 +344,7 @@ def test_active_session_refreshes_and_displays_status():
         (track,),
         BingoState(datetime(2026, 1, 1, tzinfo=UTC)),
     )
+    get_canonical_game_store().start(session)
     fake_st.session_state["bingo_session"] = session
 
     with (
@@ -489,16 +490,16 @@ def test_start_stop_and_reset_controls_delegate_to_service():
         ),
         patch.object(
             bingo_page_module,
-            "start_session_in_state",
-            side_effect=lambda state, *_args, **_kwargs: (
-                state.update({"bingo_session": session}) or session
+            "start_canonical_game",
+            side_effect=lambda *_args, **_kwargs: get_canonical_game_store().start(
+                session
             ),
         ) as start,
         patch.object(bingo_page_module, "poll_session_in_state", return_value=session),
     ):
         bingo_page()
     start.assert_called_once()
-    assert start.call_args.args[1] == "campaign"
+    assert start.call_args.args[0] == "campaign"
     assert start.call_args.kwargs["settings"].game_duration == timedelta(hours=3)
     assert start.call_args.kwargs["settings"].grace_period == timedelta(minutes=20)
     assert start.call_args.kwargs["settings"].manual_timer_duration == timedelta(
@@ -557,6 +558,7 @@ def test_stop_and_reset_controls_delegate_to_service():
         (track,),
         BingoState(datetime(2026, 1, 1, tzinfo=UTC)),
     )
+    get_canonical_game_store().start(session)
     campaign = [SimpleNamespace(campaign_id="campaign", name="Summer")]
 
     stop_st = FakeStreamlit({"Stop bingo": True})
@@ -566,21 +568,23 @@ def test_stop_and_reset_controls_delegate_to_service():
         patch.object(
             bingo_page_module, "get_official_campaigns", return_value=campaign
         ),
-        patch.object(bingo_page_module, "stop_session_in_state") as stop,
+        patch.object(bingo_page_module, "stop_canonical_game") as stop,
         patch.object(bingo_page_module, "poll_session_in_state", return_value=session),
     ):
         bingo_page()
-    stop.assert_called_once_with(stop_st.session_state)
+    stop.assert_called_once_with()
 
     reset_st = FakeStreamlit({"Reset": True})
+    get_canonical_game_store().reset()
+    get_canonical_game_store().start(session)
     reset_st.session_state["bingo_session"] = session
     with (
         patch.object(bingo_page_module, "st", reset_st),
         patch.object(
             bingo_page_module, "get_official_campaigns", return_value=campaign
         ),
-        patch.object(bingo_page_module, "reset_session") as reset,
+        patch.object(bingo_page_module, "reset_canonical_game") as reset,
         patch.object(bingo_page_module, "poll_session_in_state", return_value=session),
     ):
         bingo_page()
-    reset.assert_called_once_with(reset_st.session_state)
+    reset.assert_called_once_with()

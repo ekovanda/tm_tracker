@@ -26,6 +26,7 @@ All notable changes to this project are documented here.
 
 ### Changed
 
+- 2026-08-08T20:35:00+02:00: Made Bingo start, stop, and reset actions canonical across connected viewers, preserving one shared board and returning reset games to shared pending setup. A commit ID is not applicable before the resulting commit exists.
 - 2026-08-08T20:23:34+02:00: Shared pending Bingo campaign, timing, and shuffle configuration across connected viewers while the app process is running. A commit ID is not applicable before the resulting commit exists.
 - 2026-08-08T20:20:56+02:00: Made the canonical Bingo game store process-wide so connected viewers can share one live game without external game-state storage. A commit ID is not applicable before the resulting commit exists.
 - 2026-08-08T20:15:44+02:00: Defined the thread-safe canonical Bingo game boundary that will allow one pending or started game state to be shared by all viewers. A commit ID is not applicable before the resulting commit exists.
