@@ -11,8 +11,8 @@ Advance the current implementation plan by one step.
 
 ## Procedure
 
-1. Read `development-docs/IMPLEMENTATION-PLAN.md` and select the first unchecked step. Read only the nearby source and tests needed to implement it.
-2. Check the worktree before editing. Do not overwrite or revert unrelated user changes.
+1. Run `git status --short`. If it produces any output, stop immediately and refuse to continue. Report that the repository must be clean before `implement-next` can proceed; do not read further project files, edit files, run tests, or modify the plan.
+2. Read `development-docs/IMPLEMENTATION-PLAN.md` and select the first unchecked step. Read only the nearby source and tests needed to implement it.
 3. Implement only that step, following existing project patterns. Use the activated project virtual environment for Python execution and uv for dependency operations. Never expose secrets.
 4. Add or update automated tests for every behavior-changing step. Run the step's stated validation, or the narrowest available check, with uv (for example `uv run --active python -m pytest`). Fix local failures before continuing.
 5. For testable Python feature code, require at least 85% line coverage for the changed modules. Use `uv run --active python -m pytest --cov=<changed-module> --cov-report=term-missing --cov-fail-under=85` or an equivalent focused command.
@@ -24,6 +24,7 @@ Advance the current implementation plan by one step.
 
 ## Guardrails
 
+- A clean repository is mandatory. Any uncommitted, staged, or untracked change reported by `git status --short` is a hard stop; do not stash, revert, reset, or work around it.
 - One invocation implements one plan step. Do not opportunistically implement later steps.
 - Every behavior-changing step needs automated test coverage; aim for at least 85% line coverage of changed testable modules.
 - Do not commit unless the user explicitly requests the `create-commit` skill or the workflow explicitly invokes it after the completed feature.
