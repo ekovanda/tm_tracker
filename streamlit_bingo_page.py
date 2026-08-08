@@ -519,7 +519,6 @@ def _render_session_settings(
 def bingo_page() -> None:
     """Render campaign setup, controls, status, and the live bingo board."""
 
-    st.header("Trackmania Bingo")
     campaigns = _campaigns()
     if not campaigns:
         st.warning("No official campaigns are available.")

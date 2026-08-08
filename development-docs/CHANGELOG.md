@@ -25,6 +25,7 @@ All notable changes to this project are documented here.
 
 ### Changed
 
+- 2026-08-08T19:35:49+02:00: Branded the Streamlit shell as TM Bingo with the logo favicon, packaged version caption, single Bingo header, and subtle Eljay credit. A commit ID is not applicable before the resulting commit exists.
 - 2026-08-08T19:28:07+02:00: Added an ignored local `scripts/` folder for reusable service-credential and application-password setup utilities. A commit ID is not applicable before the resulting commit exists.
 - 2026-08-08T19:16:06+02:00: Coordinated leaderboard polling across viewers with shared snapshots, aggregate pacing, single-flight refreshes, and bounded recovery from transient service limits. A commit ID is not applicable before the resulting commit exists.
 - 2026-08-08T16:45:00Z: Enforced the 0.6-second minimum leaderboard delay so configurable polling cannot exceed two requests per second. A commit ID is not applicable before the resulting commit exists.

@@ -6,7 +6,7 @@ This document records the current implementation shape and the decisions that de
 
 The application is a Python 3.13 Streamlit app with a small functional domain layer:
 
-- `streamlit_app.py` configures the wide Streamlit page, gates access with the configured app password, authenticates, and calls the page renderer.
+- `streamlit_app.py` configures the wide Streamlit page, gates access with the configured app password, authenticates, displays the packaged version, and calls the page renderer.
 - `streamlit_bingo_page.py` owns Streamlit rendering, session controls, timer controls, and the one-second UI fragment refresh.
 - `bingo_service.py` orchestrates campaign/session loading, leaderboard polling, record de-duplication, and process-wide timer storage.
 - `bingo.py` contains immutable Bingo state models and pure transitions for board ranking, line detection, session expiry, and manual timer transitions.
@@ -18,7 +18,7 @@ Tests mirror these boundaries in `tests/`. Streamlit rendering tests use a fake 
 
 ## Runtime Flow
 
-1. `streamlit_app.main` requires the process-local app password in `APP_PASSWORD_HASH` before obtaining a Nadeo service token and rendering `bingo_page`. A successful password check is retained in the current Streamlit session state; the password and hash are never logged.
+1. `streamlit_app.main` requires the process-local app password in `APP_PASSWORD_HASH` before obtaining a Nadeo service token, displays the package version from installed metadata, and renders `bingo_page`. A successful password check is retained in the current Streamlit session state; the password and hash are never logged.
 2. Before a session exists, the page loads official campaigns and renders a color-coded 4x4 board preview plus controls for campaign, player timer duration, grace period, and maximum game length. The shuffle button increments a persisted board seed in Streamlit session state and rerenders a new valid board.
 3. Starting a session passes a `BingoSettings` value to `start_session_in_state`, which loads exactly 16 playable tracks and stores a `BingoSession` in Streamlit session state. The settings panel is not rendered while that session exists.
 4. The active-session fragment renders timers, controls, status, the board, and records.

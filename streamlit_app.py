@@ -1,3 +1,5 @@
+from importlib.metadata import PackageNotFoundError, version
+
 import streamlit as st
 
 from authentication import (
@@ -9,7 +11,23 @@ from authentication import (
 )
 from streamlit_bingo_page import bingo_page
 
-st.set_page_config(layout="wide")
+st.set_page_config(
+    page_title="TM Bingo",
+    page_icon="assets/logo.jpg",
+    layout="wide",
+)
+
+
+def _application_version() -> str:
+    """Return the installed package version without duplicating metadata."""
+
+    try:
+        return version("tm-tracker")
+    except PackageNotFoundError:
+        return "unknown"
+
+
+APPLICATION_VERSION = _application_version()
 
 
 def _require_app_password() -> bool:
@@ -53,8 +71,10 @@ def main():
             st.error(str(error))
             st.stop()
 
-    st.title("Trackmania Tracker 🏆🏎")
+    st.title("Trackmania Bingo")
+    st.caption(f"Version {APPLICATION_VERSION}")
     bingo_page()
+    st.caption("Credits: Eljay")
 
 
 if __name__ == "__main__":

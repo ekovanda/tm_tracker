@@ -45,6 +45,7 @@ class FakeStreamlit:
         self.button_result = button
         self.errors = []
         self.titles = []
+        self.captions = []
 
     def subheader(self, *_args, **_kwargs):
         pass
@@ -60,6 +61,9 @@ class FakeStreamlit:
 
     def title(self, message):
         self.titles.append(message)
+
+    def caption(self, message):
+        self.captions.append(message)
 
     def stop(self):
         raise RuntimeError("stopped")
@@ -133,7 +137,11 @@ def test_main_authenticates_new_session_and_renders_page():
         streamlit_app.main()
 
     assert fake_st.session_state["nadeo_jwt_token"] == "token"
-    assert fake_st.titles == ["Trackmania Tracker 🏆🏎"]
+    assert fake_st.titles == ["Trackmania Bingo"]
+    assert fake_st.captions == [
+        f"Version {streamlit_app.APPLICATION_VERSION}",
+        "Credits: Eljay",
+    ]
     page.assert_called_once_with()
 
 
