@@ -3,9 +3,13 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from bingo import (
+    GAME_DURATION,
+    GRACE_PERIOD,
     MANUAL_TIMER_DURATION,
+    BingoSettings,
     ManualTimerState,
     build_bingo_grid,
+    grace_period_active,
     manual_timer_remaining,
     rank_track,
     restart_manual_timer,
@@ -107,7 +111,7 @@ def test_ranking_handles_missing_times_and_ties():
 
 def test_ownership_and_timer_reset_when_line_owner_changes():
     start = datetime(2026, 1, 1, tzinfo=UTC)
-    first = start_bingo(start)
+    first = start_bingo(start, BingoSettings(grace_period=timedelta()))
     first_update = update_bingo_state(
         first, make_records(), start + timedelta(minutes=1)
     )
@@ -125,7 +129,8 @@ def test_ownership_and_timer_reset_when_line_owner_changes():
 
 def test_stable_line_completes_after_ten_minutes():
     start = datetime(2026, 1, 1, tzinfo=UTC)
-    state = update_bingo_state(start_bingo(start), make_records(), start)
+    settings = BingoSettings(grace_period=timedelta())
+    state = update_bingo_state(start_bingo(start, settings), make_records(), start)
     completed = update_bingo_state(state, make_records(), start + timedelta(minutes=10))
     assert completed.status == "completed"
     assert completed.winner is PLAYERS[1]
@@ -142,6 +147,37 @@ def test_game_expires_after_five_hours_and_manual_stop_is_terminal():
     assert stop_bingo(stopped) is stopped
 
 
+def test_grace_period_blocks_line_timer_until_boundary():
+    start = datetime(2026, 1, 1, tzinfo=UTC)
+    state = start_bingo(start)
+
+    during_grace = update_bingo_state(
+        state, make_records(), start + GRACE_PERIOD - timedelta(seconds=1)
+    )
+    assert grace_period_active(
+        during_grace, start + GRACE_PERIOD - timedelta(seconds=1)
+    )
+    assert during_grace.timer_owner is None
+    assert during_grace.timer_started_at is None
+
+    after_grace = update_bingo_state(during_grace, make_records(), start + GRACE_PERIOD)
+    assert not grace_period_active(after_grace, start + GRACE_PERIOD)
+    assert after_grace.timer_owner is PLAYERS[1]
+    assert after_grace.timer_started_at == start + GRACE_PERIOD
+
+
+def test_custom_game_duration_expires_at_configured_boundary():
+    start = datetime(2026, 1, 1, tzinfo=UTC)
+    settings = BingoSettings(
+        game_duration=timedelta(minutes=2), grace_period=timedelta()
+    )
+    expired = update_bingo_state(
+        start_bingo(start, settings), make_records(), start + timedelta(minutes=2)
+    )
+    assert expired.status == "expired"
+    assert settings.game_duration != GAME_DURATION
+
+
 def test_manual_timer_counts_down_and_expires_after_ten_minutes():
     start = datetime(2026, 1, 1, tzinfo=UTC)
     timer = start_manual_timer(ManualTimerState(), start)
@@ -154,6 +190,25 @@ def test_manual_timer_counts_down_and_expires_after_ten_minutes():
     assert manual_timer_remaining(expired, start + MANUAL_TIMER_DURATION) == timedelta(
         0
     )
+
+
+def test_manual_timer_uses_configured_duration():
+    start = datetime(2026, 1, 1, tzinfo=UTC)
+    duration = timedelta(minutes=3)
+    timer = start_manual_timer(ManualTimerState(), start, duration=duration)
+
+    assert manual_timer_remaining(timer, start + timedelta(minutes=2)) == timedelta(
+        minutes=1
+    )
+    assert update_manual_timer(timer, start + duration).status == "expired"
+
+
+def test_manual_timer_cannot_start_during_grace_period():
+    start = datetime(2026, 1, 1, tzinfo=UTC)
+    ready = ManualTimerState()
+
+    assert start_manual_timer(ready, start, grace_period_active=True) is ready
+    assert restart_manual_timer(ready, start, grace_period_active=True) is ready
 
 
 def test_manual_timer_can_restart_from_any_terminal_state():

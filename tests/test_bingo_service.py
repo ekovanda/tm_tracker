@@ -2,6 +2,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from bingo import BingoSettings
 from bingo_service import (
     REQUEST_DELAY_SECONDS,
     SESSION_KEY,
@@ -63,13 +64,29 @@ def test_start_session_seeds_sixteen_tracks():
     assert session.state.started_at == START
 
 
+def test_start_session_preserves_custom_timing_settings():
+    settings = BingoSettings(
+        game_duration=timedelta(hours=2), grace_period=timedelta(minutes=15)
+    )
+
+    session = start_session("campaign", "jwt", START, make_loader(), settings)
+
+    assert session.state.settings == settings
+
+
 def test_start_session_rejects_incomplete_campaign():
     with pytest.raises(ValueError, match="exactly 16"):
         start_session("campaign", "jwt", START, lambda *_: make_tracks()[:-1])
 
 
 def test_poll_logs_only_new_records_and_updates_bingo_state():
-    session = start_session("campaign", "jwt", START, make_loader())
+    session = start_session(
+        "campaign",
+        "jwt",
+        START,
+        make_loader(),
+        BingoSettings(grace_period=timedelta()),
+    )
     first = poll_session(
         session,
         "jwt",
@@ -177,6 +194,13 @@ def test_manual_timer_store_is_shared_and_expires_from_reads():
     assert store.get(PLAYERS[0], START + timedelta(minutes=1)).status == "active"
     assert store.get(PLAYERS[0], START + timedelta(minutes=10)).status == "expired"
     assert all(timer.status == "ready" for timer in store.reset().values())
+
+
+def test_manual_timer_store_blocks_start_and_restart_during_grace():
+    store = ManualTimerStore()
+
+    assert store.start(PLAYERS[0], START, grace_period_active=True).status == "ready"
+    assert store.restart(PLAYERS[0], START, grace_period_active=True).status == "ready"
 
 
 def test_manual_timer_store_and_shared_helpers_are_independent_per_player():

@@ -7,7 +7,15 @@ from typing import cast
 
 import streamlit as st
 
-from bingo import MANUAL_TIMER_DURATION, ManualTimerState, manual_timer_remaining
+from bingo import (
+    GAME_DURATION,
+    GRACE_PERIOD,
+    MANUAL_TIMER_DURATION,
+    BingoSettings,
+    ManualTimerState,
+    grace_period_active,
+    manual_timer_remaining,
+)
 from bingo_service import (
     SESSION_KEY,
     BingoSession,
@@ -88,7 +96,7 @@ def manual_timer_progress(timer: ManualTimerState, now: datetime) -> float:
     if timer.status != "active":
         return 0.0
     remaining = manual_timer_remaining(timer, now).total_seconds()
-    duration = MANUAL_TIMER_DURATION.total_seconds()
+    duration = timer.duration.total_seconds()
     return max(0.0, min(1.0, remaining / duration))
 
 
@@ -98,10 +106,30 @@ def timer_color(player: Player) -> str:
     return TIMER_PLAYER_COLORS[player.account_id]
 
 
-def display_deadline(started_at: datetime) -> str:
-    """Format the five-hour deadline in the local timezone."""
+def display_deadline(started_at: datetime, duration: timedelta = GAME_DURATION) -> str:
+    """Format the session deadline in the local timezone."""
 
-    return (started_at + timedelta(hours=5)).astimezone().strftime("%Y-%m-%d %H:%M")
+    return (started_at + duration).astimezone().strftime("%Y-%m-%d %H:%M")
+
+
+def grace_period_remaining(state, now: datetime) -> timedelta:
+    """Return the configured grace period time remaining for a session."""
+
+    if not grace_period_active(state, now):
+        return timedelta(0)
+    deadline = state.started_at + state.settings.grace_period
+    return max(deadline - now, timedelta(0))
+
+
+def grace_period_progress(state, now: datetime) -> float:
+    """Return the fraction of the grace period that remains."""
+
+    duration = state.settings.grace_period.total_seconds()
+    if duration <= 0:
+        return 0.0
+    return max(
+        0.0, min(1.0, grace_period_remaining(state, now).total_seconds() / duration)
+    )
 
 
 def _access_token() -> str:
@@ -196,10 +224,17 @@ def _render_session_metrics(session: BingoSession, now: datetime) -> None:
         st.metric("Current time", current_time)
     with refresh_column:
         st.metric("Last refresh", last_refresh)
+    st.caption(
+        f"Deadline: {display_deadline(now, session.state.settings.game_duration)}"
+    )
 
 
 def _render_manual_timer(
-    player: Player, timer: ManualTimerState, now: datetime
+    player: Player,
+    timer: ManualTimerState,
+    now: datetime,
+    timer_blocked: bool = False,
+    timer_duration: timedelta = MANUAL_TIMER_DURATION,
 ) -> None:
     color = timer_color(player)
     with st.container(border=True):
@@ -225,6 +260,7 @@ def _render_manual_timer(
             if timer.status == "ready":
                 start_clicked = st.button(
                     "Start",
+                    disabled=timer_blocked,
                     type="primary",
                     icon=":material/timer:",
                     use_container_width=True,
@@ -233,6 +269,7 @@ def _render_manual_timer(
             else:
                 start_clicked = st.button(
                     "Restart",
+                    disabled=timer_blocked,
                     type="primary",
                     icon=":material/restart_alt:",
                     use_container_width=True,
@@ -249,11 +286,33 @@ def _render_manual_timer(
             )
 
     if start_clicked:
-        restart_manual_timer_for_player(player, now)
+        restart_manual_timer_for_player(player, now, timer_blocked, timer_duration)
         st.rerun()
     if stop_clicked:
         stop_manual_timer_for_player(player)
         st.rerun()
+
+
+def _render_grace_period(state, now: datetime) -> None:
+    """Render the live grace countdown above the player timer section."""
+
+    remaining = grace_period_remaining(state, now)
+    if remaining <= timedelta(0):
+        return
+
+    seconds = int(remaining.total_seconds())
+    percentage = grace_period_progress(state, now) * 100
+    st.subheader("Grace period")
+    st.metric("Time remaining", f"{seconds} seconds")
+    st.markdown(
+        f'<div role="progressbar" aria-label="Grace period remaining" '
+        f'aria-valuemin="0" aria-valuemax="100" aria-valuenow="{percentage:.0f}" '
+        f'style="background:#e5e7eb; border-radius:999px; height:0.8rem; '
+        f'overflow:hidden; margin:0.4rem 0 1rem;">'
+        f'<div style="background:#374151; height:100%; width:{percentage:.2f}%; '
+        f'transition:width 0.4s linear;"></div></div>',
+        unsafe_allow_html=True,
+    )
 
 
 def _render_active_session_content() -> None:
@@ -263,10 +322,18 @@ def _render_active_session_content() -> None:
 
     now = datetime.now(UTC)
     manual_timers = get_manual_timers(now)
+    timer_blocked = grace_period_active(active_session.state, now)
+    _render_grace_period(active_session.state, now)
     timer_columns = st.columns(len(PLAYERS))
     for player, column in zip(PLAYERS, timer_columns):
         with column:
-            _render_manual_timer(player, manual_timers[player.account_id], now)
+            _render_manual_timer(
+                player,
+                manual_timers[player.account_id],
+                now,
+                timer_blocked,
+                active_session.state.settings.manual_timer_duration,
+            )
     refresh_clicked = st.button(
         "Refresh rankings",
         type="secondary",
@@ -299,6 +366,60 @@ def _render_active_session() -> None:
     _render_active_session_content()
 
 
+def _render_session_settings(
+    campaigns: list[Campaign],
+) -> tuple[str, BingoSettings] | None:
+    """Render pre-session settings and return the selected session configuration."""
+
+    st.subheader("Bingo settings")
+    campaign = st.selectbox(
+        "Official campaign",
+        campaigns,
+        format_func=lambda item: item.name,
+        key="bingo_setup_campaign",
+    )
+    game_duration_hours = int(
+        st.number_input(
+            "Maximum game length (hours)",
+            min_value=1,
+            max_value=24,
+            value=int(GAME_DURATION.total_seconds() / 3600),
+            step=1,
+            key="bingo_setup_game_duration",
+        )
+    )
+    grace_period_minutes = st.number_input(
+        "Grace period (minutes)",
+        min_value=0,
+        max_value=game_duration_hours * 60,
+        value=int(GRACE_PERIOD.total_seconds() / 60),
+        step=5,
+        key="bingo_setup_grace_period",
+    )
+    timer_duration_minutes = st.number_input(
+        "Player timer duration (minutes)",
+        min_value=1,
+        max_value=60,
+        value=int(MANUAL_TIMER_DURATION.total_seconds() / 60),
+        step=1,
+        key="bingo_setup_timer_duration",
+    )
+    start_clicked = st.button(
+        "Start bingo",
+        type="primary",
+        icon=":material/play_arrow:",
+        use_container_width=True,
+        key="bingo_setup_start",
+    )
+    if not start_clicked:
+        return None
+    return campaign.campaign_id, BingoSettings(
+        game_duration=timedelta(hours=game_duration_hours),
+        grace_period=timedelta(minutes=grace_period_minutes),
+        manual_timer_duration=timedelta(minutes=timer_duration_minutes),
+    )
+
+
 def bingo_page() -> None:
     """Render campaign setup, controls, status, and the live bingo board."""
 
@@ -308,26 +429,26 @@ def bingo_page() -> None:
         st.warning("No official campaigns are available.")
         return
 
-    campaign = st.selectbox(
-        "Official campaign",
-        campaigns,
-        format_func=lambda item: item.name,
-        disabled=SESSION_KEY in st.session_state,
-    )
     active_session = st.session_state.get(SESSION_KEY)
-    start_column, stop_column, reset_column = st.columns(3)
-    with start_column:
-        start_clicked = st.button(
-            "Start bingo",
-            disabled=active_session is not None,
-            type="primary",
-            icon=":material/play_arrow:",
-            use_container_width=True,
+    if not isinstance(active_session, BingoSession):
+        setup = _render_session_settings(campaigns)
+        if setup is None:
+            st.info("Choose session settings and start a Bingo session.")
+            return
+        campaign_id, settings = setup
+        now = datetime.now(UTC)
+        reset_manual_timers()
+        start_session_in_state(
+            _typed_session_state(), campaign_id, _access_token(), now, settings=settings
         )
+        st.session_state[LAST_POLLED_KEY] = None
+        st.rerun()
+
+    stop_column, reset_column = st.columns(2)
     with stop_column:
         stop_clicked = st.button(
             "Stop bingo",
-            disabled=active_session is None,
+            disabled=False,
             type="secondary",
             icon=":material/stop:",
             use_container_width=True,
@@ -335,20 +456,12 @@ def bingo_page() -> None:
     with reset_column:
         reset_clicked = st.button(
             "Reset",
-            disabled=active_session is None,
+            disabled=False,
             type="secondary",
             icon=":material/restart_alt:",
             use_container_width=True,
         )
 
-    if start_clicked:
-        now = datetime.now(UTC)
-        reset_manual_timers()
-        start_session_in_state(
-            _typed_session_state(), campaign.campaign_id, _access_token(), now
-        )
-        st.session_state[LAST_POLLED_KEY] = None
-        st.rerun()
     if stop_clicked:
         stop_session_in_state(_typed_session_state())
         stop_manual_timers()

@@ -11,7 +11,8 @@ The project is intended to make a live Trackmania challenge easy to run and easy
 - Compare the configured players' personal bests and identify track ownership.
 - Poll leaderboard data at a controlled cadence instead of flooding the service.
 - Keep a timestamped record of newly observed personal bests during the session.
-- Show the shared game state and one independently controlled ten-minute timer for each player.
+- Show the shared game state and one independently controlled timer for each player.
+- Configure the campaign, player timer duration, opening grace period, and maximum game length before starting.
 
 The application currently has three configured players: Eljay, Lry, and Timo. Player account IDs and API credentials are configuration concerns; credentials must never be committed.
 
@@ -45,7 +46,7 @@ The application also accepts optional `PROJECT_NAME`, `MAINTAINER_HANDLE`, and `
 uv run --active streamlit run streamlit_app.py
 ```
 
-Open the local URL printed by Streamlit, choose an official campaign, and start a Bingo session. The active page displays the board, session status, records, leaderboard refresh status, and the three player timers.
+Open the local URL printed by Streamlit. The pre-session settings page lets you choose an official campaign, player timer duration, grace period, and maximum game length. Once started, the settings page is replaced by the board, session status, records, leaderboard refresh status, and three player timers. During the grace period, a live seconds countdown and progress bar appear above the player timers.
 
 ## Development Checks
 

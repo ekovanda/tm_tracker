@@ -3,11 +3,13 @@
 import time
 from collections.abc import Callable, Iterable, MutableMapping
 from dataclasses import dataclass, replace
-from datetime import datetime
+from datetime import datetime, timedelta
 from threading import Lock
 
 import live_services
 from bingo import (
+    MANUAL_TIMER_DURATION,
+    BingoSettings,
     BingoState,
     ManualTimerState,
     restart_manual_timer,
@@ -51,9 +53,20 @@ class ManualTimerStore:
                 )
             return self._states.copy()
 
-    def start(self, player: Player, started_at: datetime) -> ManualTimerState:
+    def start(
+        self,
+        player: Player,
+        started_at: datetime,
+        grace_period_active: bool = False,
+        duration: timedelta = MANUAL_TIMER_DURATION,
+    ) -> ManualTimerState:
         with self._lock:
-            state = start_manual_timer(self._states[player.account_id], started_at)
+            state = start_manual_timer(
+                self._states[player.account_id],
+                started_at,
+                grace_period_active,
+                duration,
+            )
             self._states[player.account_id] = state
             return state
 
@@ -63,9 +76,20 @@ class ManualTimerStore:
             self._states[player.account_id] = state
             return state
 
-    def restart(self, player: Player, started_at: datetime) -> ManualTimerState:
+    def restart(
+        self,
+        player: Player,
+        started_at: datetime,
+        grace_period_active: bool = False,
+        duration: timedelta = MANUAL_TIMER_DURATION,
+    ) -> ManualTimerState:
         with self._lock:
-            state = restart_manual_timer(self._states[player.account_id], started_at)
+            state = restart_manual_timer(
+                self._states[player.account_id],
+                started_at,
+                grace_period_active,
+                duration,
+            )
             self._states[player.account_id] = state
             return state
 
@@ -112,6 +136,7 @@ def start_session(
     jwt_token: str,
     started_at: datetime,
     track_loader: TrackLoader | None = None,
+    settings: BingoSettings | None = None,
 ) -> BingoSession:
     """Seed a campaign and create a fresh active session."""
 
@@ -119,7 +144,7 @@ def start_session(
     tracks = tuple(loader(campaign_id, jwt_token))
     if len(tracks) != 16:
         raise ValueError("A bingo session requires exactly 16 campaign tracks.")
-    return BingoSession(campaign_id, tracks, start_bingo(started_at))
+    return BingoSession(campaign_id, tracks, start_bingo(started_at, settings))
 
 
 def _live_record_loader(track: Track, jwt_token: str) -> ProcessedRecord:
@@ -211,11 +236,14 @@ def get_manual_timers(now: datetime) -> dict[str, ManualTimerState]:
 
 
 def start_manual_timer_for_player(
-    player: Player, started_at: datetime
+    player: Player,
+    started_at: datetime,
+    grace_period_active: bool = False,
+    duration: timedelta = MANUAL_TIMER_DURATION,
 ) -> ManualTimerState:
     """Start one player's timer for every viewer of the app process."""
 
-    return SHARED_MANUAL_TIMER.start(player, started_at)
+    return SHARED_MANUAL_TIMER.start(player, started_at, grace_period_active, duration)
 
 
 def stop_manual_timer_for_player(player: Player) -> ManualTimerState:
@@ -233,11 +261,16 @@ def stop_manual_timers() -> dict[str, ManualTimerState]:
 
 
 def restart_manual_timer_for_player(
-    player: Player, started_at: datetime
+    player: Player,
+    started_at: datetime,
+    grace_period_active: bool = False,
+    duration: timedelta = MANUAL_TIMER_DURATION,
 ) -> ManualTimerState:
     """Restart one player's timer from ten minutes for every viewer."""
 
-    return SHARED_MANUAL_TIMER.restart(player, started_at)
+    return SHARED_MANUAL_TIMER.restart(
+        player, started_at, grace_period_active, duration
+    )
 
 
 def reset_manual_timers() -> dict[str, ManualTimerState]:
@@ -246,16 +279,18 @@ def reset_manual_timers() -> dict[str, ManualTimerState]:
     return SHARED_MANUAL_TIMER.reset()
 
 
+# pylint: disable=too-many-arguments,too-many-positional-arguments
 def start_session_in_state(
     session_state: MutableMapping[str, object],
     campaign_id: str,
     jwt_token: str,
     started_at: datetime,
     track_loader: TrackLoader | None = None,
+    settings: BingoSettings | None = None,
 ) -> BingoSession:
     """Start a session and retain it under the current Streamlit state."""
 
-    session = start_session(campaign_id, jwt_token, started_at, track_loader)
+    session = start_session(campaign_id, jwt_token, started_at, track_loader, settings)
     session_state[SESSION_KEY] = session
     return session
 

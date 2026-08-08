@@ -8,6 +8,7 @@ from player import PLAYERS, Player
 from track import Track
 
 GAME_DURATION = timedelta(hours=5)
+GRACE_PERIOD = timedelta(minutes=30)
 LINE_DURATION = timedelta(minutes=10)
 MANUAL_TIMER_DURATION = timedelta(minutes=10)
 PLAYABLE_TRACK_NUMBERS = (1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 16, 17, 18, 19)
@@ -28,8 +29,18 @@ class TrackRanking:
 
 
 @dataclass(frozen=True)
+class BingoSettings:
+    """Configurable timing settings for one Bingo session."""
+
+    game_duration: timedelta = GAME_DURATION
+    grace_period: timedelta = GRACE_PERIOD
+    manual_timer_duration: timedelta = MANUAL_TIMER_DURATION
+
+
+@dataclass(frozen=True)
 class BingoState:
     started_at: datetime
+    settings: BingoSettings = BingoSettings()
     status: str = "active"
     board: tuple[tuple[TrackRanking, ...], ...] = ()
     timer_owner: Player | None = None
@@ -43,6 +54,7 @@ class ManualTimerState:
 
     status: str = "ready"
     started_at: datetime | None = None
+    duration: timedelta = MANUAL_TIMER_DURATION
 
 
 def build_bingo_grid(tracks: Iterable[Track]) -> tuple[tuple[Track, ...], ...]:
@@ -136,10 +148,18 @@ def _line_owner(
     return owners[0][0] if owners else None
 
 
-def start_bingo(started_at: datetime) -> BingoState:
+def start_bingo(
+    started_at: datetime, settings: BingoSettings | None = None
+) -> BingoState:
     """Create a new active bingo game."""
 
-    return BingoState(started_at=started_at)
+    return BingoState(started_at=started_at, settings=settings or BingoSettings())
+
+
+def grace_period_active(state: BingoState, now: datetime) -> bool:
+    """Return whether the session is still inside its grace period."""
+
+    return now < state.started_at + state.settings.grace_period
 
 
 def stop_bingo(state: BingoState) -> BingoState:
@@ -150,14 +170,18 @@ def stop_bingo(state: BingoState) -> BingoState:
     return replace(state, status="stopped")
 
 
+# pylint: disable=redefined-outer-name
 def start_manual_timer(
-    timer: ManualTimerState, started_at: datetime
+    timer: ManualTimerState,
+    started_at: datetime,
+    grace_period_active: bool = False,
+    duration: timedelta = MANUAL_TIMER_DURATION,
 ) -> ManualTimerState:
     """Start the manual timer once it is ready."""
 
-    if timer.status != "ready":
+    if timer.status != "ready" or grace_period_active:
         return timer
-    return ManualTimerState(status="active", started_at=started_at)
+    return ManualTimerState(status="active", started_at=started_at, duration=duration)
 
 
 def stop_manual_timer(timer: ManualTimerState) -> ManualTimerState:
@@ -169,11 +193,16 @@ def stop_manual_timer(timer: ManualTimerState) -> ManualTimerState:
 
 
 def restart_manual_timer(
-    _timer: ManualTimerState, started_at: datetime
+    timer: ManualTimerState,
+    started_at: datetime,
+    grace_period_active: bool = False,
+    duration: timedelta = MANUAL_TIMER_DURATION,
 ) -> ManualTimerState:
     """Start a fresh ten-minute timer from any previous timer state."""
 
-    return ManualTimerState(status="active", started_at=started_at)
+    if grace_period_active:
+        return timer
+    return ManualTimerState(status="active", started_at=started_at, duration=duration)
 
 
 def update_manual_timer(timer: ManualTimerState, now: datetime) -> ManualTimerState:
@@ -182,7 +211,7 @@ def update_manual_timer(timer: ManualTimerState, now: datetime) -> ManualTimerSt
     if (
         timer.status == "active"
         and timer.started_at is not None
-        and now - timer.started_at >= MANUAL_TIMER_DURATION
+        and now - timer.started_at >= timer.duration
     ):
         return replace(timer, status="expired")
     return timer
@@ -193,7 +222,7 @@ def manual_timer_remaining(timer: ManualTimerState, now: datetime) -> timedelta:
 
     if timer.status != "active" or timer.started_at is None:
         return timedelta(0)
-    return max(MANUAL_TIMER_DURATION - (now - timer.started_at), timedelta(0))
+    return max(timer.duration - (now - timer.started_at), timedelta(0))
 
 
 def update_bingo_state(
@@ -203,7 +232,7 @@ def update_bingo_state(
 
     if state.status != "active":
         return state
-    if now - state.started_at >= GAME_DURATION:
+    if now - state.started_at >= state.settings.game_duration:
         return replace(state, status="expired")
 
     rankings = _ranking_by_track(records)
@@ -223,6 +252,9 @@ def update_bingo_state(
         )
         for row in grid_tracks
     )
+    if grace_period_active(state, now):
+        return replace(state, board=board, timer_owner=None, timer_started_at=None)
+
     owner = _line_owner(board, state.timer_owner)
     if owner is None:
         return replace(state, board=board, timer_owner=None, timer_started_at=None)

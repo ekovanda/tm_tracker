@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import streamlit_bingo_page as bingo_page_module
-from bingo import BingoState, ManualTimerState, TrackRanking
+from bingo import BingoSettings, BingoState, ManualTimerState, TrackRanking
 from bingo_service import BingoSession, RecordEntry
 from player import PLAYERS
 from streamlit_bingo_page import (
@@ -14,6 +14,8 @@ from streamlit_bingo_page import (
     display_deadline,
     display_manual_timer,
     display_margin,
+    grace_period_progress,
+    grace_period_remaining,
     manual_timer_progress,
     owner_color,
     owner_text_color,
@@ -63,6 +65,40 @@ def test_timer_colors_identify_each_player():
     ]
 
 
+def test_grace_period_helpers_report_remaining_seconds_and_fraction():
+    start = datetime(2026, 1, 1, tzinfo=UTC)
+    state = BingoState(
+        start,
+        BingoSettings(grace_period=timedelta(minutes=5)),
+    )
+    now = start + timedelta(minutes=2, seconds=30)
+
+    assert grace_period_remaining(state, now) == timedelta(minutes=2, seconds=30)
+    assert grace_period_progress(state, now) == 0.5
+    assert grace_period_remaining(state, start + timedelta(minutes=5)) == timedelta(0)
+    assert grace_period_progress(state, start + timedelta(minutes=5)) == 0.0
+
+
+def test_grace_period_renderer_shows_bar_and_seconds_counter():
+    fake_st = FakeStreamlit()
+    start = datetime(2026, 1, 1, tzinfo=UTC)
+    state = BingoState(start, BingoSettings(grace_period=timedelta(minutes=5)))
+
+    with patch.object(bingo_page_module, "st", fake_st):
+        # pylint: disable=protected-access
+        bingo_page_module._render_grace_period(
+            state, start + timedelta(minutes=2, seconds=30)
+        )
+
+    assert fake_st.metric_calls == [(("Time remaining", "150 seconds"), {})]
+    assert any(
+        'aria-label="Grace period remaining"' in call
+        and "background:#374151" in call
+        and "width:50.00%" in call
+        for call in fake_st.markdown_calls
+    )
+
+
 def test_manual_timer_display_shows_remaining_and_terminal_states():
     now = datetime(2026, 1, 1, tzinfo=UTC)
     assert display_manual_timer(ManualTimerState(), now) == "Not started"
@@ -85,6 +121,32 @@ def test_manual_timer_progress_depletes_from_full_to_empty():
     assert manual_timer_progress(ManualTimerState("stopped", now), now) == 0.0
 
 
+def test_manual_timer_progress_uses_configured_duration():
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    timer = ManualTimerState("active", now, timedelta(minutes=5))
+
+    assert manual_timer_progress(timer, now + timedelta(minutes=2)) == 0.6
+
+
+def test_manual_timer_controls_are_disabled_during_grace_period():
+    fake_st = FakeStreamlit()
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+
+    with patch.object(bingo_page_module, "st", fake_st):
+        # pylint: disable=protected-access
+        bingo_page_module._render_manual_timer(
+            PLAYERS[0], ManualTimerState(), now, True
+        )
+
+    timer_buttons = {
+        label: kwargs
+        for label, kwargs in fake_st.button_calls
+        if label in {"Start", "Stop"}
+    }
+    assert timer_buttons["Start"]["disabled"] is True
+    assert timer_buttons["Stop"]["disabled"] is True
+
+
 class FakeColumn:
     def __enter__(self):
         return self
@@ -93,15 +155,18 @@ class FakeColumn:
         return False
 
 
+# pylint: disable=too-many-instance-attributes
 class FakeStreamlit:
-    def __init__(self, button_results=None):
+    def __init__(self, button_results=None, number_input_values=None):
         self.session_state = {"nadeo_jwt_token": {"accessToken": "jwt"}}
         self.markdown_calls = []
         self.caption_calls = []
         self.info_calls = []
         self.button_calls = []
         self.metric_calls = []
+        self.number_input_calls = []
         self.button_results = button_results or {}
+        self.number_input_values = number_input_values or {}
 
     def columns(self, count):
         return [FakeColumn() for _ in range(count)]
@@ -120,6 +185,10 @@ class FakeStreamlit:
 
     def selectbox(self, _label, options, **_kwargs):
         return options[0]
+
+    def number_input(self, label, **kwargs):
+        self.number_input_calls.append((label, kwargs))
+        return self.number_input_values.get(label, kwargs["value"])
 
     def button(self, *_args, **_kwargs):
         self.button_calls.append((_args[0], _kwargs))
@@ -166,6 +235,17 @@ def test_setup_and_board_rendering_use_streamlit_controls():
         _render_cell(ranking)
         _render_board(session)
 
+    assert [label for label, _kwargs in fake_st.number_input_calls] == [
+        "Maximum game length (hours)",
+        "Grace period (minutes)",
+        "Player timer duration (minutes)",
+    ]
+    for _label, kwargs in fake_st.number_input_calls:
+        assert all(
+            isinstance(kwargs[name], int)
+            for name in ("min_value", "max_value", "value", "step")
+        )
+    assert [label for label, _kwargs in fake_st.button_calls] == ["Start bingo"]
     assert len(fake_st.markdown_calls) == 2
     assert f"background: {owner_color(PLAYERS[0])}" in fake_st.markdown_calls[0]
     assert "Track 1" not in fake_st.markdown_calls[0]
@@ -196,12 +276,7 @@ def test_active_session_refreshes_and_displays_status():
 
     poll.assert_called_once()
     buttons = dict(fake_st.button_calls)
-    assert buttons["Start bingo"] == {
-        "disabled": True,
-        "type": "primary",
-        "icon": ":material/play_arrow:",
-        "use_container_width": True,
-    }
+    assert "Start bingo" not in buttons
     assert buttons["Stop bingo"] == {
         "disabled": False,
         "type": "secondary",
@@ -314,7 +389,14 @@ def test_start_stop_and_reset_controls_delegate_to_service():
     )
     campaign = [SimpleNamespace(campaign_id="campaign", name="Summer")]
 
-    start_st = FakeStreamlit({"Start bingo": True})
+    start_st = FakeStreamlit(
+        {"Start bingo": True},
+        {
+            "Maximum game length (hours)": 3.0,
+            "Grace period (minutes)": 20,
+            "Player timer duration (minutes)": 7,
+        },
+    )
     with (
         patch.object(bingo_page_module, "st", start_st),
         patch.object(
@@ -323,7 +405,7 @@ def test_start_stop_and_reset_controls_delegate_to_service():
         patch.object(
             bingo_page_module,
             "start_session_in_state",
-            side_effect=lambda state, *_args: (
+            side_effect=lambda state, *_args, **_kwargs: (
                 state.update({"bingo_session": session}) or session
             ),
         ) as start,
@@ -331,6 +413,12 @@ def test_start_stop_and_reset_controls_delegate_to_service():
     ):
         bingo_page()
     start.assert_called_once()
+    assert start.call_args.args[1] == "campaign"
+    assert start.call_args.kwargs["settings"].game_duration == timedelta(hours=3)
+    assert start.call_args.kwargs["settings"].grace_period == timedelta(minutes=20)
+    assert start.call_args.kwargs["settings"].manual_timer_duration == timedelta(
+        minutes=7
+    )
 
     stop_st = FakeStreamlit({"Stop bingo": True})
     stop_st.session_state["bingo_session"] = session
