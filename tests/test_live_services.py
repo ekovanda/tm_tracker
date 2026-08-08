@@ -2,11 +2,13 @@ import json
 from unittest.mock import Mock, call, patch
 
 import pytest
+import requests
 
 from authentication import get_user_agent
 from live_services import (
     LIVE_SERVICES_URL,
     PLAYABLE_TRACK_NUMBERS,
+    LiveServiceError,
     _get_player_by_account_id,
     _get_track_by_uid,
     get_campaign_tracks,
@@ -20,9 +22,10 @@ from tm_lookups import CLUBS
 from track import TRACKS
 
 
-def response_for(payload):
+def response_for(payload, status_code=200):
     response = Mock()
     response.text = json.dumps(payload)
+    response.status_code = status_code
     return response
 
 
@@ -129,7 +132,7 @@ def test_campaign_payload_and_missing_tracks_are_rejected():
     invalid_response = response_for({"campaignList": ["invalid"]})
     with (
         patch("live_services.requests.get", return_value=invalid_response),
-        pytest.raises(ValueError, match="Every item"),
+        pytest.raises(LiveServiceError, match="invalid campaign payload"),
     ):
         get_official_campaigns("jwt")
 
@@ -142,7 +145,7 @@ def test_campaign_payload_and_missing_tracks_are_rejected():
             "live_services.requests.get",
             side_effect=[tracks_response, map_response],
         ),
-        pytest.raises(ValueError, match="missing track numbers"),
+        pytest.raises(LiveServiceError, match="missing track numbers"),
     ):
         get_playable_campaign_tracks("campaign-1", "jwt")
 
@@ -182,6 +185,60 @@ def test_club_track_processing_and_lookup_helpers():
         _get_track_by_uid("missing", tracks=[])
     with pytest.raises(ValueError):
         _get_player_by_account_id("missing", players=[])
+
+
+@pytest.mark.parametrize(
+    ("status_code", "category", "retryable"),
+    [(401, "authentication", False), (429, "rate_limit", True), (503, "server", True)],
+)
+def test_live_http_failures_have_actionable_categories(
+    status_code, category, retryable
+):
+    response = response_for({"error": "failure"}, status_code)
+    response.raise_for_status.side_effect = requests.HTTPError(response=response)
+
+    with (
+        patch("live_services.requests.get", return_value=response),
+        pytest.raises(LiveServiceError) as raised,
+    ):
+        get_club_track_pbs(CLUBS["Elliot"], TRACKS[0], jwt_token="jwt")
+
+    assert raised.value.status_code == status_code
+    assert raised.value.category == category
+    assert raised.value.retryable is retryable
+
+
+@pytest.mark.parametrize("failure", [requests.Timeout(), requests.ConnectionError()])
+def test_live_transport_failures_are_translated(failure):
+    with (
+        patch("live_services.requests.get", side_effect=failure),
+        pytest.raises(LiveServiceError) as raised,
+    ):
+        get_club_track_pbs(CLUBS["Elliot"], TRACKS[0], jwt_token="jwt")
+
+    assert raised.value.category in {"timeout", "connection"}
+    assert raised.value.retryable is True
+
+
+def test_live_malformed_json_is_translated():
+    response = response_for(None)
+    response.text = "not-json"
+
+    with (
+        patch("live_services.requests.get", return_value=response),
+        pytest.raises(LiveServiceError, match="malformed JSON"),
+    ):
+        get_club_track_pbs(CLUBS["Elliot"], TRACKS[0], jwt_token="jwt")
+
+
+def test_live_leaderboard_payload_must_be_an_object():
+    response = response_for(["invalid"])
+
+    with (
+        patch("live_services.requests.get", return_value=response),
+        pytest.raises(LiveServiceError, match="invalid leaderboard payload"),
+    ):
+        get_club_track_pbs(CLUBS["Elliot"], TRACKS[0], jwt_token="jwt")
 
 
 def test_postprocess_can_use_campaign_track_metadata():

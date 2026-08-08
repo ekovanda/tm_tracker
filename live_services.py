@@ -21,6 +21,23 @@ class Campaign:
     name: str
 
 
+class LiveServiceError(RuntimeError):
+    """Raised when Live Services returns or produces an unusable response."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        category: str,
+        status_code: int | None = None,
+        retryable: bool = False,
+    ) -> None:
+        super().__init__(message)
+        self.category = category
+        self.status_code = status_code
+        self.retryable = retryable
+
+
 def _authorization_headers(jwt_token: str) -> dict[str, str]:
     if not jwt_token:
         raise ValueError("Missing a jwt token.")
@@ -30,6 +47,60 @@ def _authorization_headers(jwt_token: str) -> dict[str, str]:
         "Authorization": f"nadeo_v1 t={jwt_token}",
         "User-Agent": get_user_agent(),
     }
+
+
+def _get_json(url: str, headers: dict[str, str], **kwargs) -> object:
+    try:
+        response = requests.get(
+            url, headers=headers, timeout=REQUEST_TIMEOUT_SECONDS, **kwargs
+        )
+    except requests.Timeout as error:
+        raise LiveServiceError(
+            "Live Services request timed out.", category="timeout", retryable=True
+        ) from error
+    except requests.ConnectionError as error:
+        raise LiveServiceError(
+            "Live Services connection failed.", category="connection", retryable=True
+        ) from error
+    except requests.RequestException as error:
+        raise LiveServiceError(
+            "Live Services request failed.", category="transport", retryable=True
+        ) from error
+
+    try:
+        response.raise_for_status()
+    except requests.HTTPError as error:
+        status_code = response.status_code
+        if status_code == 401:
+            category = "authentication"
+        elif status_code == 429:
+            category = "rate_limit"
+        elif status_code >= 500:
+            category = "server"
+        else:
+            category = "http"
+        raise LiveServiceError(
+            f"Live Services returned HTTP {status_code}.",
+            category=category,
+            status_code=status_code,
+            retryable=status_code == 429 or status_code >= 500,
+        ) from error
+
+    try:
+        return json.loads(response.text)
+    except json.JSONDecodeError as error:
+        raise LiveServiceError(
+            "Live Services returned malformed JSON.", category="json"
+        ) from error
+
+
+def _campaign_payload(payload: object) -> list[dict]:
+    try:
+        return _list_from_payload(payload, "campaignList")
+    except (TypeError, ValueError) as error:
+        raise LiveServiceError(
+            "Live Services returned an invalid campaign payload.", category="payload"
+        ) from error
 
 
 def _list_from_payload(payload: object, key: str) -> list[dict]:
@@ -48,59 +119,70 @@ def _list_from_payload(payload: object, key: str) -> list[dict]:
 def get_official_campaigns(jwt_token: str, length: int = 100) -> list[Campaign]:
     """Return official campaigns available to the authenticated user."""
 
-    response = requests.get(
+    payload = _get_json(
         f"{LIVE_SERVICES_URL}/api/token/campaign/official",
-        headers=_authorization_headers(jwt_token),
+        _authorization_headers(jwt_token),
         params={"offset": 0, "length": length},
-        timeout=REQUEST_TIMEOUT_SECONDS,
     )
-    response.raise_for_status()
-    payload = json.loads(response.text)
-    campaigns = _list_from_payload(payload, "campaignList")
+    campaigns = _campaign_payload(payload)
 
-    return [
-        Campaign(
-            campaign_id=str(item.get("id", item.get("campaignId"))),
-            name=str(item["name"]),
-        )
-        for item in campaigns
-    ]
+    try:
+        return [
+            Campaign(
+                campaign_id=str(item.get("id", item.get("campaignId"))),
+                name=str(item["name"]),
+            )
+            for item in campaigns
+        ]
+    except (KeyError, TypeError) as error:
+        raise LiveServiceError(
+            "Live Services returned an invalid campaign payload.", category="payload"
+        ) from error
 
 
 def get_campaign_tracks(campaign_id: str, jwt_token: str) -> list[Track]:
     """Return all maps in a campaign in their official campaign order."""
 
-    campaigns_response = requests.get(
+    campaigns_payload = _get_json(
         f"{LIVE_SERVICES_URL}/api/token/campaign/official",
-        headers=_authorization_headers(jwt_token),
+        _authorization_headers(jwt_token),
         params={"offset": 0, "length": 100},
-        timeout=REQUEST_TIMEOUT_SECONDS,
     )
-    campaigns_response.raise_for_status()
-    campaigns_payload = json.loads(campaigns_response.text)
-    campaigns = _list_from_payload(campaigns_payload, "campaignList")
+    campaigns = _campaign_payload(campaigns_payload)
     campaign = next(
         (item for item in campaigns if str(item.get("id")) == str(campaign_id)),
         None,
     )
     if campaign is None:
-        raise ValueError(f"Campaign not found: {campaign_id}")
+        raise LiveServiceError(
+            f"Campaign not found: {campaign_id}.", category="payload"
+        )
 
     playlist = campaign.get("playlist")
     if not isinstance(playlist, list) or not all(
         isinstance(item, dict) and item.get("mapUid") for item in playlist
     ):
-        raise ValueError(f"Campaign has no valid playlist: {campaign_id}")
+        raise LiveServiceError(
+            f"Campaign has no valid playlist: {campaign_id}.", category="payload"
+        )
 
-    map_response = requests.get(
+    maps_payload = _get_json(
         f"{LIVE_SERVICES_URL}/api/token/map/get-multiple",
-        headers=_authorization_headers(jwt_token),
+        _authorization_headers(jwt_token),
         params={"mapUidList": ",".join(item["mapUid"] for item in playlist)},
-        timeout=REQUEST_TIMEOUT_SECONDS,
     )
-    map_response.raise_for_status()
-    maps = _list_from_payload(json.loads(map_response.text), "mapList")
-    maps_by_uid = {str(item["uid"]): item for item in maps}
+    try:
+        maps = _list_from_payload(maps_payload, "mapList")
+    except (TypeError, ValueError) as error:
+        raise LiveServiceError(
+            "Live Services returned an invalid map payload.", category="payload"
+        ) from error
+    try:
+        maps_by_uid = {str(item["uid"]): item for item in maps}
+    except KeyError as error:
+        raise LiveServiceError(
+            f"Campaign map metadata is missing: {error}.", category="payload"
+        ) from error
 
     try:
         return [
@@ -112,7 +194,9 @@ def get_campaign_tracks(campaign_id: str, jwt_token: str) -> list[Track]:
             for index, item in enumerate(playlist)
         ]
     except KeyError as error:
-        raise ValueError(f"Campaign map metadata is missing: {error}") from error
+        raise LiveServiceError(
+            f"Campaign map metadata is missing: {error}.", category="payload"
+        ) from error
 
 
 def get_playable_campaign_tracks(campaign_id: str, jwt_token: str) -> list[Track]:
@@ -124,7 +208,10 @@ def get_playable_campaign_tracks(campaign_id: str, jwt_token: str) -> list[Track
         number for number in PLAYABLE_TRACK_NUMBERS if number not in track_by_number
     ]
     if missing_numbers:
-        raise ValueError(f"Campaign is missing track numbers: {missing_numbers}")
+        raise LiveServiceError(
+            f"Campaign is missing track numbers: {missing_numbers}",
+            category="payload",
+        )
 
     return [track_by_number[number] for number in PLAYABLE_TRACK_NUMBERS]
 
@@ -146,10 +233,13 @@ def get_club_track_pbs(
         f"length={length}&offset={offset}"
     )
 
-    # Note that this is a get request
-    club_track_pbs = requests.get(url, headers=headers, timeout=REQUEST_TIMEOUT_SECONDS)
-    club_track_pbs.raise_for_status()
-    return json.loads(club_track_pbs.text)
+    payload = _get_json(url, headers)
+    if not isinstance(payload, dict):
+        raise LiveServiceError(
+            "Live Services returned an invalid leaderboard payload.",
+            category="payload",
+        )
+    return payload
 
 
 def postprocess_club_track_pbs(club_track_pbs: dict, tracks=None) -> dict:

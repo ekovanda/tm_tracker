@@ -22,6 +22,7 @@ from bingo_service import (
     stop_session,
     stop_session_in_state,
 )
+from live_services import LiveServiceError
 from player import PLAYERS
 from track import Track
 
@@ -191,6 +192,18 @@ def test_poll_rejects_request_delay_below_safe_minimum():
             "jwt",
             START,
             poll_settings=PollSettings(REQUEST_DELAY_SECONDS - 0.1, no_sleep),
+        )
+
+
+def test_poll_translates_unusable_record_payloads():
+    session = start_session("campaign", "jwt", START, make_loader())
+
+    def invalid_loader(_track, _jwt_token):
+        raise KeyError("players")
+
+    with pytest.raises(LiveServiceError, match="could not be processed"):
+        poll_session(
+            session, "jwt", START, invalid_loader, PollSettings(sleep_fn=no_sleep)
         )
 
 

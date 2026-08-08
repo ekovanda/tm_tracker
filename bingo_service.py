@@ -217,7 +217,12 @@ def poll_session(
     for index, track in enumerate(session.tracks):
         if index:
             sleeper(settings.request_delay)
-        records.append(loader(track, jwt_token))
+        try:
+            records.append(loader(track, jwt_token))
+        except (KeyError, TypeError, ValueError) as error:
+            raise live_services.LiveServiceError(
+                "Leaderboard payload could not be processed.", category="payload"
+            ) from error
     entries, seen_records = _new_entries(records, now, session.seen_records)
     return replace(
         session,

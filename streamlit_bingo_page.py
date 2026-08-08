@@ -36,7 +36,7 @@ from bingo_service import (
     stop_manual_timers,
     stop_session_in_state,
 )
-from live_services import Campaign, get_official_campaigns
+from live_services import Campaign, LiveServiceError, get_official_campaigns
 from player import PLAYERS, Player
 from track import Track
 from utils import prettify_time
@@ -177,9 +177,11 @@ def _run_live_request(operation, now: datetime):
 
     try:
         return operation(_access_token(now))
-    except requests.HTTPError as error:
-        response = error.response
-        if response is None or response.status_code != 401:
+    except (LiveServiceError, requests.HTTPError) as error:
+        status_code = getattr(error, "status_code", None)
+        if isinstance(error, requests.HTTPError) and error.response is not None:
+            status_code = error.response.status_code
+        if status_code != 401:
             raise
         return operation(_refresh_access_token())
 
