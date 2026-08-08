@@ -89,7 +89,7 @@ Behavior-changing Python modules should have focused tests and at least 85% line
 
 - `development-docs/SKETCHBOOK.md` is the internal place for rough ideas and requirements; between captures it contains only its heading.
 - `development-docs/IMPLEMENTATION-PLAN.md` is the concise, numbered list of testable implementation steps.
-- `development-docs/CHANGELOG.md` records user-visible completed changes under `Unreleased`.
+- `development-docs/CHANGELOG.md` records concise user-visible completed changes under `Unreleased`, grouped as `Added`, `Changed`, or `Fixed`. New entries use an ISO 8601 timestamp and the abbreviated commit ID once available; before a commit exists, the entry states that the ID is pending.
 - The `plan-implementation` skill turns sketchbook ideas into a plan.
 - The `implement-next` skill implements one unchecked step and must review and synchronize this document and the root `README.md`.
 - The `create-commit` skill creates one focused local commit after validation. Never push from this workflow.
