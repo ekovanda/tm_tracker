@@ -11,6 +11,7 @@ All notable changes to this project are documented here.
 - Added the Streamlit Bingo game with unique series-balanced boards, record history, and paced leaderboard polling.
 - Added a shared ten-minute manual Bingo timer with visible countdown and terminal states.
 - Added consistent identifying User-Agent headers to authentication and Live API requests.
+- Added process-wide leaderboard polling coordination with shared caching, single-flight refreshes, aggregate pacing, and bounded transient-error backoff.
 
 ### Fixed
 
@@ -22,6 +23,7 @@ All notable changes to this project are documented here.
 
 ### Changed
 
+- 2026-08-08T19:16:06+02:00: Coordinated leaderboard polling across viewers with shared snapshots, aggregate pacing, single-flight refreshes, and bounded recovery from transient service limits. A commit ID is not applicable before the resulting commit exists.
 - 2026-08-08T16:45:00Z: Enforced the 0.6-second minimum leaderboard delay so configurable polling cannot exceed two requests per second. A commit ID is not applicable before the resulting commit exists.
 - 2026-08-08T16:45:00Z: Tightened leaderboard request pacing to 0.6 seconds between requests and added measured test coverage proving the observed rate stays below two requests per second. A commit ID is not applicable before the resulting commit exists.
 - 2026-08-08T16:35:29Z: Replaced named board layouts with a visible color-coded 4x4 preview and seeded shuffle control that preserves one track from each series in every row and column. A commit ID is not applicable before the resulting commit exists.

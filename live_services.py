@@ -31,11 +31,13 @@ class LiveServiceError(RuntimeError):
         category: str,
         status_code: int | None = None,
         retryable: bool = False,
+        retry_after: float | None = None,
     ) -> None:
         super().__init__(message)
         self.category = category
         self.status_code = status_code
         self.retryable = retryable
+        self.retry_after = retry_after
 
 
 def _authorization_headers(jwt_token: str) -> dict[str, str]:
@@ -79,11 +81,19 @@ def _get_json(url: str, headers: dict[str, str], **kwargs) -> object:
             category = "server"
         else:
             category = "http"
+        retry_after = None
+        raw_retry_after = getattr(response, "headers", {}).get("Retry-After")
+        if raw_retry_after is not None:
+            try:
+                retry_after = max(0.0, float(raw_retry_after))
+            except (TypeError, ValueError):
+                retry_after = None
         raise LiveServiceError(
             f"Live Services returned HTTP {status_code}.",
             category=category,
             status_code=status_code,
             retryable=status_code == 429 or status_code >= 500,
+            retry_after=retry_after,
         ) from error
 
     try:

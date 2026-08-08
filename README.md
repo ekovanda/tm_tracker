@@ -10,6 +10,7 @@ The project is intended to make a live Trackmania challenge easy to run and easy
 - Build a fair 4x4 Bingo board from the 16 playable campaign tracks.
 - Compare the configured players' personal bests and identify track ownership.
 - Poll leaderboard data at a controlled cadence instead of flooding the service.
+- Coordinate leaderboard polling across viewers with shared snapshots, aggregate pacing, and bounded recovery from transient service limits.
 - Keep a timestamped record of newly observed personal bests during the session.
 - Show the shared game state and one independently controlled timer for each player.
 - Configure the campaign, player timer duration, opening grace period, and maximum game length before starting.

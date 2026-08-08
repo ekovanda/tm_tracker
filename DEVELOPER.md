@@ -23,7 +23,8 @@ Tests mirror these boundaries in `tests/`. Streamlit rendering tests use a fake 
 3. Starting a session passes a `BingoSettings` value to `start_session_in_state`, which loads exactly 16 playable tracks and stores a `BingoSession` in Streamlit session state. The settings panel is not rendered while that session exists.
 4. The active-session fragment renders timers, controls, status, the board, and records.
 5. The fragment reruns every second for timer display. Leaderboard polling remains independently gated by `poll_is_due` at one-minute intervals, or by the explicit refresh button.
-6. Polling loads each track in order, waits `REQUEST_DELAY_SECONDS` between leaderboard requests, de-duplicates new records, and applies the pure Bingo state transition.
+6. Polling uses the process-wide `SHARED_POLLING_COORDINATOR`. Successful snapshots are cached for one minute by campaign, token audience, and loader; overlapping viewers single-flight the same refresh, while each session still applies its own record de-duplication and Bingo transition.
+7. The coordinator reserves aggregate request start slots across viewers and accounts for request duration, keeping the configured 0.6-second minimum interval. Retryable 429 and 5xx failures use bounded exponential backoff, optionally honoring a numeric `Retry-After` header. Manual refresh bypasses the snapshot cache; automatic refresh remains one-minute gated.
 
 ## State Ownership
 
@@ -52,10 +53,10 @@ The pure functions in `bingo.py` return new frozen state values rather than muta
 
 - Nadeo requests use the service-account token path currently used by the app and include a useful identifying `User-Agent`.
 - Authentication and Live Services credentials come from environment variables loaded by `python-dotenv`; never add credentials to source or documentation.
-- Service tokens retain the access-token `exp` value as `accessTokenExpiresAt`, refresh five minutes before expiry through the documented refresh endpoint, and replace access/refresh tokens together. Idempotent Live API operations retry once after a 401; broader HTTP failure translation and backoff remain separate polling work.
-- Live API GET failures use `LiveServiceError` with a category (`authentication`, `rate_limit`, `server`, `timeout`, `connection`, `transport`, `json`, or `payload`), optional HTTP status, and retryability metadata. Polling translates malformed processed records into the same contract; retry/backoff policy remains owned by the later polling-coordination step.
+- Service tokens retain the access-token `exp` value as `accessTokenExpiresAt`, refresh five minutes before expiry through the documented refresh endpoint, and replace access/refresh tokens together. Idempotent Live API operations retry once after a 401.
+- Live API GET failures use `LiveServiceError` with a category (`authentication`, `rate_limit`, `server`, `timeout`, `connection`, `transport`, `json`, or `payload`), optional HTTP status, retryability metadata, and an optional parsed `Retry-After` delay. Polling translates malformed processed records into the same contract and retries only retryable failures with bounded backoff.
 - Campaign loading uses the official campaign endpoint, then retrieves map metadata and selects the 16 playable track numbers.
-- Leaderboard requests are paced with `REQUEST_DELAY_SECONDS` (currently 0.6 seconds), keeping the theoretical maximum below `MAX_REQUESTS_PER_SECOND` (2). The sleep function is injected in tests, which record each request start time and calculate the observed rate.
+- Leaderboard requests are coordinated process-wide by campaign and token audience. `REQUEST_DELAY_SECONDS` (currently 0.6 seconds) is a shared minimum between request starts, and request duration is included when calculating the next slot. The sleep function and coordinator clock are injectable in tests, which cover cache reuse, overlapping refreshes, aggregate pacing, and bounded retry backoff.
 - The UI refresh interval and network poll interval are intentionally separate: one-second rendering must not become one-second API traffic.
 - Session settings are passed into `start_bingo` and retained in `BingoState`; the pre-session configuration UI is separate from the domain enforcement. The board seed is persisted with the session settings.
 

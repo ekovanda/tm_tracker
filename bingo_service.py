@@ -4,9 +4,10 @@ import time
 from collections.abc import Callable, Iterable, MutableMapping
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
-from threading import Lock
+from threading import Condition, Lock
 
 import live_services
+from authentication import decode_jwt_payload
 from bingo import (
     MANUAL_TIMER_DURATION,
     BingoSettings,
@@ -27,10 +28,15 @@ from track import Track
 SESSION_KEY = "bingo_session"
 MAX_REQUESTS_PER_SECOND = 2
 REQUEST_DELAY_SECONDS = 0.6
+POLL_CACHE_TTL_SECONDS = 60.0
+MAX_TRANSIENT_RETRIES = 2
+BACKOFF_BASE_SECONDS = 1.0
+BACKOFF_MAX_SECONDS = 8.0
 ProcessedRecord = dict
 TrackLoader = Callable[[str, str], list[Track]]
 RecordLoader = Callable[[Track, str], ProcessedRecord]
 SleepFn = Callable[[float], None]
+ClockFn = Callable[[], float]
 
 
 class ManualTimerStore:
@@ -125,11 +131,137 @@ class BingoSession:
 
 
 @dataclass(frozen=True)
+class PollSnapshot:
+    """Successful raw leaderboard records shared between Streamlit viewers."""
+
+    records: tuple[ProcessedRecord, ...]
+    completed_at: float
+
+
+class PollingCoordinator:
+    """Coordinate and pace leaderboard polls across the application process."""
+
+    # pylint: disable=too-many-arguments,too-many-locals
+    def __init__(
+        self, clock: ClockFn | None = None, aggregate_pacing: bool = True
+    ) -> None:
+        self._clock = clock or time.monotonic
+        self._aggregate_pacing = aggregate_pacing
+        self._condition = Condition()
+        self._cache: dict[tuple[str, str, int | None], PollSnapshot] = {}
+        self._in_flight: set[tuple[str, str, int | None]] = set()
+        self._next_request_at = 0.0
+        self._request_count = 0
+
+    def fetch(
+        self,
+        campaign_id: str,
+        token_audience: str,
+        jwt_token: str,
+        tracks: tuple[Track, ...],
+        loader: RecordLoader,
+        *,
+        request_delay: float,
+        sleep_fn: SleepFn,
+        cache_ttl: float = POLL_CACHE_TTL_SECONDS,
+        force_refresh: bool = False,
+        loader_key: int | None = None,
+        max_retries: int = MAX_TRANSIENT_RETRIES,
+        backoff_base: float = BACKOFF_BASE_SECONDS,
+        backoff_max: float = BACKOFF_MAX_SECONDS,
+    ) -> tuple[ProcessedRecord, ...]:
+        key = (campaign_id, token_audience, loader_key)
+        with self._condition:
+            if not force_refresh:
+                cached = self._cache.get(key)
+                if cached and self._clock() - cached.completed_at < cache_ttl:
+                    return cached.records
+            while key in self._in_flight:
+                self._condition.wait()
+                cached = self._cache.get(key)
+                if cached:
+                    return cached.records
+            self._in_flight.add(key)
+
+        try:
+            records = tuple(
+                self._fetch_records(
+                    tracks,
+                    loader,
+                    jwt_token,
+                    request_delay,
+                    sleep_fn,
+                    max_retries,
+                    backoff_base,
+                    backoff_max,
+                )
+            )
+        except Exception:
+            with self._condition:
+                self._in_flight.remove(key)
+                self._condition.notify_all()
+            raise
+
+        with self._condition:
+            self._cache[key] = PollSnapshot(records, self._clock())
+            self._in_flight.remove(key)
+            self._condition.notify_all()
+        return records
+
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
+    def _fetch_records(
+        self,
+        tracks: tuple[Track, ...],
+        loader: RecordLoader,
+        jwt_token: str,
+        request_delay: float,
+        sleep_fn: SleepFn,
+        max_retries: int,
+        backoff_base: float,
+        backoff_max: float,
+    ) -> list[ProcessedRecord]:
+        records = []
+        for track in tracks:
+            for attempt in range(max_retries + 1):
+                self._wait_for_request_slot(request_delay, sleep_fn)
+                try:
+                    records.append(loader(track, jwt_token))
+                    break
+                except live_services.LiveServiceError as error:
+                    if not error.retryable or attempt == max_retries:
+                        raise
+                    delay = error.retry_after or min(
+                        backoff_base * (2**attempt), backoff_max
+                    )
+                    sleep_fn(delay)
+        return records
+
+    def _wait_for_request_slot(self, request_delay: float, sleep_fn: SleepFn) -> None:
+        if not self._aggregate_pacing:
+            if self._request_count:
+                sleep_fn(request_delay)
+            self._request_count += 1
+            return
+        with self._condition:
+            now = self._clock()
+            wait_for = max(0.0, self._next_request_at - now)
+            self._next_request_at = max(now, self._next_request_at) + request_delay
+        if wait_for:
+            sleep_fn(wait_for)
+
+
+SHARED_POLLING_COORDINATOR = PollingCoordinator()
+
+
+@dataclass(frozen=True)
 class PollSettings:
     """Configurable pacing for the leaderboard requests in one poll."""
 
     request_delay: float = REQUEST_DELAY_SECONDS
     sleep_fn: SleepFn | None = None
+    cache_ttl: float = POLL_CACHE_TTL_SECONDS
+    force_refresh: bool = False
+    coordinator: PollingCoordinator | None = None
 
 
 def start_session(
@@ -213,16 +345,23 @@ def poll_session(
             f"{REQUEST_DELAY_SECONDS} seconds."
         )
     sleeper = settings.sleep_fn or time.sleep
-    records = []
-    for index, track in enumerate(session.tracks):
-        if index:
-            sleeper(settings.request_delay)
-        try:
-            records.append(loader(track, jwt_token))
-        except (KeyError, TypeError, ValueError) as error:
-            raise live_services.LiveServiceError(
-                "Leaderboard payload could not be processed.", category="payload"
-            ) from error
+    coordinator = settings.coordinator or (
+        SHARED_POLLING_COORDINATOR
+        if record_loader is None
+        else PollingCoordinator(aggregate_pacing=False)
+    )
+    records = coordinator.fetch(
+        session.campaign_id,
+        _token_audience(jwt_token),
+        jwt_token,
+        session.tracks,
+        lambda track, token: _load_record(loader, track, token),
+        request_delay=settings.request_delay,
+        sleep_fn=sleeper,
+        cache_ttl=settings.cache_ttl,
+        force_refresh=settings.force_refresh or record_loader is not None,
+        loader_key=None if record_loader is None else id(loader),
+    )
     entries, seen_records = _new_entries(records, now, session.seen_records)
     return replace(
         session,
@@ -230,6 +369,23 @@ def poll_session(
         records=session.records + entries,
         seen_records=seen_records,
     )
+
+
+def _load_record(loader: RecordLoader, track: Track, jwt_token: str) -> ProcessedRecord:
+    try:
+        return loader(track, jwt_token)
+    except (KeyError, TypeError, ValueError) as error:
+        raise live_services.LiveServiceError(
+            "Leaderboard payload could not be processed.", category="payload"
+        ) from error
+
+
+def _token_audience(jwt_token: str) -> str:
+    try:
+        audience = decode_jwt_payload(jwt_token).get("aud")
+    except (ValueError, KeyError, TypeError):
+        audience = None
+    return str(audience or "unknown")
 
 
 def stop_session(session: BingoSession) -> BingoSession:

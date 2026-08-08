@@ -26,6 +26,7 @@ from bingo import (
 from bingo_service import (
     SESSION_KEY,
     BingoSession,
+    PollSettings,
     get_manual_timers,
     poll_session_in_state,
     reset_manual_timers,
@@ -419,7 +420,12 @@ def _render_active_session_content() -> None:
     if refresh_clicked or poll_is_due(last_polled_at, now):
         with st.spinner("Refreshing rankings..."):
             active_session = _run_live_request(
-                lambda token: poll_session_in_state(_typed_session_state(), token, now),
+                lambda token: poll_session_in_state(
+                    _typed_session_state(),
+                    token,
+                    now,
+                    poll_settings=PollSettings(force_refresh=refresh_clicked),
+                ),
                 now,
             )
         st.session_state[LAST_POLLED_KEY] = now

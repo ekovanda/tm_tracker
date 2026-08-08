@@ -1,5 +1,6 @@
 from datetime import UTC, datetime, timedelta
 from itertools import pairwise
+from threading import Event, Thread
 
 import pytest
 
@@ -10,6 +11,7 @@ from bingo_service import (
     SESSION_KEY,
     BingoSession,
     ManualTimerStore,
+    PollingCoordinator,
     PollSettings,
     get_manual_timers,
     poll_session,
@@ -193,6 +195,139 @@ def test_poll_rejects_request_delay_below_safe_minimum():
             START,
             poll_settings=PollSettings(REQUEST_DELAY_SECONDS - 0.1, no_sleep),
         )
+
+
+def test_polling_coordinator_reuses_successful_snapshot():
+    clock = [0.0]
+    coordinator = PollingCoordinator(lambda: clock[0])
+    calls = []
+    track = (make_tracks()[0],)
+
+    def load(current_track, token):
+        calls.append((current_track, token))
+        return {"track": current_track, "players": []}
+
+    first = coordinator.fetch(
+        "campaign",
+        "NadeoLiveServices",
+        "jwt",
+        track,
+        load,
+        request_delay=REQUEST_DELAY_SECONDS,
+        sleep_fn=no_sleep,
+    )
+    second = coordinator.fetch(
+        "campaign",
+        "NadeoLiveServices",
+        "jwt-rotated",
+        track,
+        load,
+        request_delay=REQUEST_DELAY_SECONDS,
+        sleep_fn=no_sleep,
+    )
+
+    assert first == second
+    assert len(calls) == 1
+    assert calls[0][1] == "jwt"
+
+
+def test_polling_coordinator_single_flights_overlapping_refreshes():
+    coordinator = PollingCoordinator(lambda: 0.0)
+    track = (make_tracks()[0],)
+    started = Event()
+    release = Event()
+    calls = []
+    results = []
+
+    def load(current_track, _token):
+        calls.append(current_track)
+        started.set()
+        release.wait(timeout=2)
+        return {"track": current_track, "players": []}
+
+    def fetch() -> None:
+        results.append(
+            coordinator.fetch(
+                "campaign",
+                "NadeoLiveServices",
+                "jwt",
+                track,
+                load,
+                request_delay=REQUEST_DELAY_SECONDS,
+                sleep_fn=no_sleep,
+                force_refresh=True,
+            )
+        )
+
+    first = Thread(target=fetch)
+    second = Thread(target=fetch)
+    first.start()
+    assert started.wait(timeout=2)
+    second.start()
+    release.set()
+    first.join(timeout=2)
+    second.join(timeout=2)
+
+    assert len(calls) == 1
+    assert len(results) == 2
+    assert results[0] == results[1]
+
+
+def test_polling_coordinator_accounts_for_request_duration():
+    clock = [0.0]
+    coordinator = PollingCoordinator(lambda: clock[0])
+    request_times = []
+    track = tuple(make_tracks()[:2])
+
+    def load(current_track, _token):
+        request_times.append(clock[0])
+        clock[0] += 0.8
+        return {"track": current_track, "players": []}
+
+    coordinator.fetch(
+        "campaign",
+        "NadeoLiveServices",
+        "jwt",
+        track,
+        load,
+        request_delay=REQUEST_DELAY_SECONDS,
+        sleep_fn=lambda delay: clock.__setitem__(0, clock[0] + delay),
+        force_refresh=True,
+    )
+
+    assert request_times == [0.0, 0.8]
+
+
+def test_polling_coordinator_retries_retryable_errors_with_bounded_backoff():
+    coordinator = PollingCoordinator(lambda: 0.0)
+    track = (make_tracks()[0],)
+    delays = []
+    attempts = [0]
+
+    def load(current_track, _token):
+        attempts[0] += 1
+        if attempts[0] == 1:
+            raise LiveServiceError(
+                "busy", category="rate_limit", status_code=429, retryable=True
+            )
+        return {"track": current_track, "players": []}
+
+    result = coordinator.fetch(
+        "campaign",
+        "NadeoLiveServices",
+        "jwt",
+        track,
+        load,
+        request_delay=REQUEST_DELAY_SECONDS,
+        sleep_fn=delays.append,
+        force_refresh=True,
+        backoff_base=2.0,
+        backoff_max=2.5,
+    )
+
+    assert len(result) == 1
+    assert attempts[0] == 2
+    assert delays == [2.0, REQUEST_DELAY_SECONDS]
 
 
 def test_poll_translates_unusable_record_payloads():
