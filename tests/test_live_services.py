@@ -3,6 +3,7 @@ from unittest.mock import Mock, call, patch
 
 import pytest
 
+from authentication import get_user_agent
 from live_services import (
     LIVE_SERVICES_URL,
     PLAYABLE_TRACK_NUMBERS,
@@ -41,7 +42,11 @@ def test_get_official_campaigns_maps_list_payload():
     response.raise_for_status.assert_called_once_with()
     request.assert_called_once_with(
         f"{LIVE_SERVICES_URL}/api/token/campaign/official",
-        headers={"Content-Type": "application/json", "Authorization": "nadeo_v1 t=jwt"},
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": "nadeo_v1 t=jwt",
+            "User-Agent": get_user_agent(),
+        },
         params={"offset": 0, "length": 100},
         timeout=30,
     )
@@ -83,6 +88,7 @@ def test_campaign_track_mapping_and_playable_selection():
             headers={
                 "Content-Type": "application/json",
                 "Authorization": "nadeo_v1 t=jwt",
+                "User-Agent": get_user_agent(),
             },
             params={"offset": 0, "length": 100},
             timeout=30,
@@ -92,6 +98,7 @@ def test_campaign_track_mapping_and_playable_selection():
             headers={
                 "Content-Type": "application/json",
                 "Authorization": "nadeo_v1 t=jwt",
+                "User-Agent": get_user_agent(),
             },
             params={"mapUidList": ",".join(f"uid-{number}" for number in range(1, 20))},
             timeout=30,

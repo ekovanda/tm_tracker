@@ -12,6 +12,7 @@ from authentication import (
     get_nadeo_jwt_token,
     get_nadeo_service_token,
     get_ubisoft_authentication_ticket,
+    get_user_agent,
 )
 
 
@@ -81,6 +82,7 @@ def test_nadeo_token_and_jwt_helpers():
             "refreshToken": "refresh",
         }
     assert request.call_args.kwargs["json"] == {"audience": "NadeoLiveServices"}
+    assert request.call_args.kwargs["headers"]["User-Agent"] == get_user_agent()
 
     payload = base64.urlsafe_b64encode(b'{"sub":"player"}').decode().rstrip("=")
     assert decode_jwt_payload(f"header.{payload}.signature") == {"sub": "player"}
@@ -103,11 +105,20 @@ def test_nadeo_service_token_uses_basic_auth_and_live_audience():
         headers={
             "Content-Type": "application/json",
             "Authorization": "Basic service-credentials",
-            "User-Agent": "Eljay's TM Tracker / test@example.com",
+            "User-Agent": "Eljay's TM Tracker / Eljay / test@example.com",
         },
         json={"audience": "NadeoLiveServices"},
         timeout=30,
     )
+
+
+def test_user_agent_includes_configured_project_identity_and_contact():
+    with (
+        patch.object(authentication, "PROJECT_NAME", "Tracker"),
+        patch.object(authentication, "MAINTAINER_HANDLE", "maintainer"),
+        patch.object(authentication, "EMAIL", "maintainer@example.com"),
+    ):
+        assert get_user_agent() == "Tracker / maintainer / maintainer@example.com"
 
 
 def test_nadeo_service_token_rejects_missing_or_invalid_responses():

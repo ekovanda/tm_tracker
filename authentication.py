@@ -10,11 +10,20 @@ from config import UBISOFT_APP_ID
 load_dotenv()
 BASIC_AUTH = os.getenv("BASIC_AUTH")
 EMAIL = os.getenv("EMAIL")
+PROJECT_NAME = os.getenv("PROJECT_NAME", "Eljay's TM Tracker")
+MAINTAINER_HANDLE = os.getenv("MAINTAINER_HANDLE", "Eljay")
 REQUEST_TIMEOUT_SECONDS = 30
 
 
 class UbisoftAuthenticationError(RuntimeError):
     """Raised when Ubisoft does not return an authentication ticket."""
+
+
+def get_user_agent() -> str:
+    """Build the identifying User-Agent shared by all service requests."""
+
+    contact = EMAIL or "contact configured through EMAIL"
+    return f"{PROJECT_NAME} / {MAINTAINER_HANDLE} / {contact}"
 
 
 def get_ubisoft_authentication_ticket() -> str:
@@ -35,7 +44,7 @@ def get_ubisoft_authentication_ticket() -> str:
         "Content-Type": "application/json",
         "Ubi-AppId": UBISOFT_APP_ID,
         "Authorization": BASIC_AUTH,
-        "User-Agent": f"Eljay's TM Tracker / {EMAIL}",
+        "User-Agent": get_user_agent(),
     }
 
     url_ubisoft_user_auth = "https://public-ubiservices.ubi.com/v3/profiles/sessions"
@@ -72,6 +81,7 @@ def get_nadeo_jwt_token(ubisoft_authentication_ticket: str) -> dict:
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"ubi_v1 t={ubisoft_authentication_ticket}",
+        "User-Agent": get_user_agent(),
     }
 
     url_nadeo_user_auth = (
@@ -107,7 +117,7 @@ def get_nadeo_service_token(basic_auth: str | None = None) -> dict:
         headers={
             "Content-Type": "application/json",
             "Authorization": authorization,
-            "User-Agent": f"Eljay's TM Tracker / {EMAIL}",
+            "User-Agent": get_user_agent(),
         },
         json={"audience": "NadeoLiveServices"},
         timeout=REQUEST_TIMEOUT_SECONDS,

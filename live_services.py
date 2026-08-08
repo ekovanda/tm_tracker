@@ -3,6 +3,7 @@ from dataclasses import dataclass
 
 import requests
 
+from authentication import get_user_agent
 from player import PLAYERS, Player
 from tm_lookups import Club
 from track import TRACKS, Track
@@ -27,6 +28,7 @@ def _authorization_headers(jwt_token: str) -> dict[str, str]:
     return {
         "Content-Type": "application/json",
         "Authorization": f"nadeo_v1 t={jwt_token}",
+        "User-Agent": get_user_agent(),
     }
 
 

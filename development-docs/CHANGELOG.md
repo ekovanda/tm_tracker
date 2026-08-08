@@ -10,6 +10,7 @@ All notable changes to this project are documented here.
 - Added the project planning and implementation workflow.
 - Added the Streamlit Bingo game with unique series-balanced boards, record history, and paced leaderboard polling.
 - Added a shared ten-minute manual Bingo timer with visible countdown and terminal states.
+- Added consistent identifying User-Agent headers to authentication and Live API requests.
 
 ### Fixed
 
