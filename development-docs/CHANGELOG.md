@@ -6,6 +6,7 @@ All notable changes to this project are documented here.
 
 ### Added
 
+- 2026-08-08T19:29:00+02:00: Added password protection before Nadeo authentication using a PBKDF2-SHA256 hash supplied through `APP_PASSWORD_HASH`. A commit ID is not applicable before the resulting commit exists.
 - Added pre-commit hooks for Ruff formatting and linting, Pylint, and mypy.
 - Added the project planning and implementation workflow.
 - Added the Streamlit Bingo game with unique series-balanced boards, record history, and paced leaderboard polling.
@@ -24,6 +25,7 @@ All notable changes to this project are documented here.
 
 ### Changed
 
+- 2026-08-08T19:28:07+02:00: Added an ignored local `scripts/` folder for reusable service-credential and application-password setup utilities. A commit ID is not applicable before the resulting commit exists.
 - 2026-08-08T19:16:06+02:00: Coordinated leaderboard polling across viewers with shared snapshots, aggregate pacing, single-flight refreshes, and bounded recovery from transient service limits. A commit ID is not applicable before the resulting commit exists.
 - 2026-08-08T16:45:00Z: Enforced the 0.6-second minimum leaderboard delay so configurable polling cannot exceed two requests per second. A commit ID is not applicable before the resulting commit exists.
 - 2026-08-08T16:45:00Z: Tightened leaderboard request pacing to 0.6 seconds between requests and added measured test coverage proving the observed rate stays below two requests per second. A commit ID is not applicable before the resulting commit exists.

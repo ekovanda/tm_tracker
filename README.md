@@ -37,7 +37,10 @@ Create a private `.env` file with the required authentication value:
 
 ```text
 BASIC_AUTH=<service-account-basic-authorization>
+APP_PASSWORD_HASH=<pbkdf2-sha256-application-password-hash>
 ```
+
+Set `APP_PASSWORD_HASH` to the PBKDF2-SHA256 application password hash before running the app. The app requests this password before contacting Nadeo. Keep both values private and do not commit them.
 
 The application also accepts optional `PROJECT_NAME`, `MAINTAINER_HANDLE`, and `EMAIL` values for the identifying request `User-Agent`. Keep `.env` private and do not print or commit its contents.
 

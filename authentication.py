@@ -1,6 +1,8 @@
 import base64
+import hashlib
 import json
 import os
+import secrets
 from datetime import UTC, datetime, timedelta
 
 import requests
@@ -10,6 +12,7 @@ from config import UBISOFT_APP_ID
 
 load_dotenv()
 BASIC_AUTH = os.getenv("BASIC_AUTH")
+APP_PASSWORD_HASH = os.getenv("APP_PASSWORD_HASH")
 EMAIL = os.getenv("EMAIL")
 PROJECT_NAME = os.getenv("PROJECT_NAME", "Eljay's TM Tracker")
 MAINTAINER_HANDLE = os.getenv("MAINTAINER_HANDLE", "Eljay")
@@ -23,6 +26,40 @@ TOKEN_REFRESH_SKEW = timedelta(minutes=5)
 
 class UbisoftAuthenticationError(RuntimeError):
     """Raised when Ubisoft does not return an authentication ticket."""
+
+
+class PasswordConfigurationError(RuntimeError):
+    """Raised when the application password hash is missing or malformed."""
+
+
+def verify_app_password(password: str, encoded_hash: str | None = None) -> bool:
+    """Verify an app password against a PBKDF2-SHA256 encoded hash."""
+
+    stored_hash = encoded_hash if encoded_hash is not None else APP_PASSWORD_HASH
+    if not stored_hash:
+        raise PasswordConfigurationError(
+            "Missing APP_PASSWORD_HASH. Set a PBKDF2 password hash in .env."
+        )
+
+    try:
+        algorithm, iterations_text, salt_text, digest_text = stored_hash.split("$")
+        iterations = int(iterations_text)
+        salt = base64.urlsafe_b64decode(salt_text.encode("ascii"))
+        expected_digest = base64.urlsafe_b64decode(digest_text.encode("ascii"))
+    except (ValueError, TypeError, UnicodeError) as error:
+        raise PasswordConfigurationError(
+            "APP_PASSWORD_HASH must use the format pbkdf2_sha256$iterations$salt$digest."
+        ) from error
+
+    if algorithm != "pbkdf2_sha256" or iterations < 100_000 or not salt:
+        raise PasswordConfigurationError(
+            "APP_PASSWORD_HASH must use a valid PBKDF2-SHA256 configuration."
+        )
+
+    actual_digest = hashlib.pbkdf2_hmac(
+        "sha256", password.encode("utf-8"), salt, iterations
+    )
+    return secrets.compare_digest(actual_digest, expected_digest)
 
 
 def get_user_agent() -> str:
