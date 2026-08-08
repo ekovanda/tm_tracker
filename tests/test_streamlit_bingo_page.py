@@ -2,6 +2,8 @@ from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+import pytest
+
 import streamlit_bingo_page as bingo_page_module
 from bingo import (
     BingoSettings,
@@ -9,7 +11,12 @@ from bingo import (
     ManualTimerState,
     TrackRanking,
 )
-from bingo_service import BingoSession, RecordEntry
+from bingo_service import (
+    BingoSession,
+    PendingGame,
+    RecordEntry,
+    get_canonical_game_store,
+)
 from player import PLAYERS
 from streamlit_bingo_page import (
     _render_board,
@@ -30,6 +37,16 @@ from streamlit_bingo_page import (
     track_colors,
 )
 from track import Track
+
+
+@pytest.fixture(autouse=True)
+def reset_canonical_game_store():
+    store = get_canonical_game_store()
+    store.reset()
+    store.configure(PendingGame())
+    yield
+    store.reset()
+    store.configure(PendingGame())
 
 
 def test_poll_is_due_handles_initial_and_one_minute_windows():
@@ -499,7 +516,38 @@ def test_shuffle_button_changes_and_persists_board_seed():
         result = bingo_page_module._render_session_settings(campaigns)
 
     assert result is None
-    assert fake_st.session_state[bingo_page_module.BOARD_SEED_KEY] == 1
+    assert get_canonical_game_store().get().pending.settings.board_seed == 1
+
+
+def test_setup_configuration_is_shared_between_viewers():
+    campaigns = [SimpleNamespace(campaign_id="campaign", name="Summer")]
+    first_st = FakeStreamlit(
+        number_input_values={
+            "Maximum game length (hours)": 3,
+            "Grace period (minutes)": 20,
+            "Player timer duration (minutes)": 7,
+        }
+    )
+
+    with patch.object(bingo_page_module, "st", first_st):
+        # pylint: disable=protected-access
+        assert bingo_page_module._render_session_settings(campaigns) is None
+
+    second_st = FakeStreamlit()
+    with patch.object(bingo_page_module, "st", second_st):
+        # pylint: disable=protected-access
+        assert bingo_page_module._render_session_settings(campaigns) is None
+
+    pending = get_canonical_game_store().get().pending
+    assert pending.campaign_id == "campaign"
+    assert pending.settings == BingoSettings(
+        game_duration=timedelta(hours=3),
+        grace_period=timedelta(minutes=20),
+        manual_timer_duration=timedelta(minutes=7),
+    )
+    assert second_st.number_input_calls[0][1]["value"] == 3
+    assert second_st.number_input_calls[1][1]["value"] == 20
+    assert second_st.number_input_calls[2][1]["value"] == 7
 
 
 def test_stop_and_reset_controls_delegate_to_service():

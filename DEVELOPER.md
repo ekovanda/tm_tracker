@@ -19,7 +19,7 @@ Tests mirror these boundaries in `tests/`. Streamlit rendering tests use a fake 
 ## Runtime Flow
 
 1. `streamlit_app.main` requires the app password hash from Streamlit-managed `st.secrets["APP_PASSWORD_HASH"]` before obtaining a Nadeo service token, displays the package version from installed metadata, and renders `bingo_page`. A successful password check is retained in the current Streamlit session state; the password and hash are never logged.
-2. Before a session exists, the page loads official campaigns and renders a color-coded 4x4 board preview plus controls for campaign, player timer duration, grace period, and maximum game length. The shuffle button increments a persisted board seed in Streamlit session state and rerenders a new valid board.
+2. Before a session exists, the page loads official campaigns and renders a color-coded 4x4 board preview plus controls for campaign, player timer duration, grace period, and maximum game length. These pending setup values are read from and written to `SHARED_CANONICAL_GAME`, including the board seed changed by shuffle, so connected viewers see the same configuration while the process is running.
 3. Starting a session passes a `BingoSettings` value to `start_session_in_state`, which loads exactly 16 playable tracks and stores a `BingoSession` in Streamlit session state. The settings panel is not rendered while that session exists.
 4. The active-session fragment renders timers, controls, status, the board, and records.
 5. The fragment reruns every second for timer display. Leaderboard polling remains independently gated by `poll_is_due` at one-minute intervals, or by the explicit refresh button.
@@ -34,7 +34,7 @@ There are two deliberately different state scopes:
 - `BingoState.settings` stores immutable per-session settings, including the board seed, overall session duration, opening grace period, and player timer duration.
 - `SHARED_MANUAL_TIMER` is a process-wide, thread-safe `ManualTimerStore`. It keeps one `ManualTimerState` per configured player so multiple viewers see the same player timer state.
 
-The canonical-game work introduces `PendingGame`, `CanonicalGameState`, and the locked `CanonicalGameStore` in `bingo_service.py`. `SHARED_CANONICAL_GAME` is the process-wide singleton that all connected viewers will use; it models one pending configuration or one started/stopped `BingoSession`, rejects configuration changes after start, and atomically enforces first-start-wins. The current Streamlit wiring still uses browser session state; later implementation steps will migrate that wiring to this shared boundary. A process restart intentionally clears this in-memory game state, so the next game starts fresh from its selected configuration and current API data; no durable game-state storage is required.
+The canonical-game work introduces `PendingGame`, `CanonicalGameState`, and the locked `CanonicalGameStore` in `bingo_service.py`. `SHARED_CANONICAL_GAME` is the process-wide singleton that all connected viewers will use; it models one pending configuration or one started/stopped `BingoSession`, rejects configuration changes after start, and atomically enforces first-start-wins. Pending setup now uses this shared boundary, while the current active-session wiring still uses browser session state; later implementation steps will migrate the active session as well. A process restart intentionally clears this in-memory game state, so the next game starts fresh from its selected configuration and current API data; no durable game-state storage is required.
 
 Do not move timer state into browser-local widget state when changing the timer. The process-wide store is the synchronization boundary for connected viewers. `ManualTimerStore.get_all` updates all states while holding one lock and must not call its lock-acquiring `get` method from inside that lock.
 
@@ -70,7 +70,7 @@ The pure functions in `bingo.py` return new frozen state values rather than muta
 - Timer and record ownership colors are Eljay green, Lry yellow, and Timo blue. Board cells use track-series colors: light grey, green, blue, and red, with dark text for readable contrast.
 - Timer progress is rendered as an accessible HTML progressbar with a remaining fraction and player-specific color.
 - Streamlit fragment execution is used when the runtime is available. The page has a direct content fallback so rendering helpers remain testable without a live Streamlit runtime.
-- The pre-session settings panel is only rendered when no `BingoSession` exists. It renders the seeded board preview and shuffle action. Active sessions expose stop/reset controls and retain the board seed and timing values in their immutable state.
+- The pre-session settings panel is only rendered when no `BingoSession` exists. It renders the shared seeded board preview and shuffle action. Active sessions expose stop/reset controls and retain the board seed and timing values in their immutable state.
 - The active-session fragment renders the configured grace period's remaining seconds and progress bar immediately before the player timer columns; it reuses the one-second fragment refresh and does not trigger additional leaderboard polling.
 
 ## Testing and Quality Gates

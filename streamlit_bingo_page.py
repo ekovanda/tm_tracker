@@ -1,6 +1,7 @@
 """Streamlit setup and live board for the Trackmania bingo game."""
 
 from collections.abc import MutableMapping
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from html import escape
 from typing import cast
@@ -14,7 +15,6 @@ from authentication import (
 )
 from bingo import (
     GAME_DURATION,
-    GRACE_PERIOD,
     MANUAL_TIMER_DURATION,
     PLAYABLE_TRACK_NUMBERS,
     BingoSettings,
@@ -26,7 +26,9 @@ from bingo import (
 from bingo_service import (
     SESSION_KEY,
     BingoSession,
+    PendingGame,
     PollSettings,
+    get_canonical_game_store,
     get_manual_timers,
     poll_session_in_state,
     reset_manual_timers,
@@ -454,14 +456,24 @@ def _render_session_settings(
 ) -> tuple[str, BingoSettings] | None:
     """Render pre-session settings and return the selected session configuration."""
 
+    canonical_store = get_canonical_game_store()
+    pending = canonical_store.get().pending
     st.subheader("Bingo settings")
+    campaign_index = next(
+        (
+            index
+            for index, campaign_option in enumerate(campaigns)
+            if campaign_option.campaign_id == pending.campaign_id
+        ),
+        0,
+    )
     campaign = st.selectbox(
         "Official campaign",
         campaigns,
         format_func=lambda item: item.name,
-        key="bingo_setup_campaign",
+        index=campaign_index,
     )
-    board_seed = int(st.session_state.get(BOARD_SEED_KEY, 0))
+    board_seed = pending.settings.board_seed
     _render_setup_board(board_seed)
     shuffle_clicked = st.button(
         "Shuffle board",
@@ -471,33 +483,36 @@ def _render_session_settings(
         key="bingo_setup_shuffle",
     )
     if shuffle_clicked:
-        st.session_state[BOARD_SEED_KEY] = board_seed + 1
+        board_seed += 1
+        canonical_store.configure(
+            PendingGame(
+                campaign.campaign_id,
+                replace(pending.settings, board_seed=board_seed),
+            )
+        )
         st.rerun()
     game_duration_hours = int(
         st.number_input(
             "Maximum game length (hours)",
             min_value=1,
             max_value=24,
-            value=int(GAME_DURATION.total_seconds() / 3600),
+            value=int(pending.settings.game_duration.total_seconds() / 3600),
             step=1,
-            key="bingo_setup_game_duration",
         )
     )
     grace_period_minutes = st.number_input(
         "Grace period (minutes)",
         min_value=0,
         max_value=game_duration_hours * 60,
-        value=int(GRACE_PERIOD.total_seconds() / 60),
+        value=int(pending.settings.grace_period.total_seconds() / 60),
         step=5,
-        key="bingo_setup_grace_period",
     )
     timer_duration_minutes = st.number_input(
         "Player timer duration (minutes)",
         min_value=1,
         max_value=60,
-        value=int(MANUAL_TIMER_DURATION.total_seconds() / 60),
+        value=int(pending.settings.manual_timer_duration.total_seconds() / 60),
         step=1,
-        key="bingo_setup_timer_duration",
     )
     start_clicked = st.button(
         "Start bingo",
@@ -506,14 +521,16 @@ def _render_session_settings(
         use_container_width=True,
         key="bingo_setup_start",
     )
-    if not start_clicked:
-        return None
-    return campaign.campaign_id, BingoSettings(
+    settings = BingoSettings(
         game_duration=timedelta(hours=game_duration_hours),
         grace_period=timedelta(minutes=grace_period_minutes),
         manual_timer_duration=timedelta(minutes=timer_duration_minutes),
         board_seed=board_seed,
     )
+    canonical_store.configure(PendingGame(campaign.campaign_id, settings))
+    if not start_clicked:
+        return None
+    return campaign.campaign_id, settings
 
 
 def bingo_page() -> None:
