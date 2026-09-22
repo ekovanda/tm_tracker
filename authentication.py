@@ -8,6 +8,9 @@ import requests
 import streamlit as st
 
 from config import UBISOFT_APP_ID
+from logger import get_logger
+
+logger = get_logger("authentication")
 
 
 def _get_secret(name: str, default: str | None = None) -> str | None:
@@ -68,7 +71,12 @@ def verify_app_password(password: str, encoded_hash: str | None = None) -> bool:
     actual_digest = hashlib.pbkdf2_hmac(
         "sha256", password.encode("utf-8"), salt, iterations
     )
-    return secrets.compare_digest(actual_digest, expected_digest)
+    is_valid = secrets.compare_digest(actual_digest, expected_digest)
+    if is_valid:
+        logger.info("Application password verified successfully.")
+    else:
+        logger.warning("Application password verification failed.")
+    return is_valid
 
 
 def get_user_agent() -> str:
@@ -164,6 +172,9 @@ def get_nadeo_service_token(basic_auth: str | None = None) -> dict:
             "Missing BASIC_AUTH. Set the service-account Basic authorization value in .env."
         )
 
+    logger.info(
+        "Requesting Nadeo service token", extra={"audience": "NadeoLiveServices"}
+    )
     response = requests.post(
         "https://prod.trackmania.core.nadeo.online/v2/authentication/token/basic",
         headers={
@@ -177,6 +188,10 @@ def get_nadeo_service_token(basic_auth: str | None = None) -> dict:
     try:
         response.raise_for_status()
     except requests.HTTPError as error:
+        logger.error(
+            "Nadeo service-account authentication failed",
+            extra={"status_code": getattr(response, "status_code", None)},
+        )
         raise UbisoftAuthenticationError(
             "Nadeo service-account authentication failed. Check BASIC_AUTH."
         ) from error
@@ -184,15 +199,18 @@ def get_nadeo_service_token(basic_auth: str | None = None) -> dict:
     try:
         payload = json.loads(response.text)
     except json.JSONDecodeError as error:
+        logger.error("Nadeo returned an invalid authentication response")
         raise UbisoftAuthenticationError(
             "Nadeo returned an invalid authentication response."
         ) from error
 
     if not isinstance(payload, dict) or not payload.get("accessToken"):
+        logger.error("Nadeo authentication returned no access token")
         raise UbisoftAuthenticationError(
             "Nadeo authentication returned no access token. Check BASIC_AUTH."
         )
 
+    logger.info("Nadeo service token acquired successfully")
     return _with_access_token_expiry(payload)
 
 
@@ -202,6 +220,7 @@ def refresh_nadeo_service_token(refresh_token: str) -> dict:
     if not refresh_token:
         raise UbisoftAuthenticationError("Missing Nadeo refresh token.")
 
+    logger.info("Refreshing Nadeo service token")
     response = requests.post(
         TOKEN_REFRESH_URL,
         headers={
@@ -213,24 +232,32 @@ def refresh_nadeo_service_token(refresh_token: str) -> dict:
     try:
         response.raise_for_status()
     except requests.HTTPError as error:
+        logger.error(
+            "Nadeo token refresh failed",
+            extra={"status_code": getattr(response, "status_code", None)},
+        )
         raise UbisoftAuthenticationError("Nadeo token refresh failed.") from error
 
     try:
         payload = json.loads(response.text)
     except json.JSONDecodeError as error:
+        logger.error("Nadeo returned an invalid token refresh response")
         raise UbisoftAuthenticationError(
             "Nadeo returned an invalid token refresh response."
         ) from error
 
     if not isinstance(payload, dict) or not payload.get("accessToken"):
+        logger.error("Nadeo token refresh returned no access token")
         raise UbisoftAuthenticationError(
             "Nadeo token refresh returned no access token."
         )
     if not payload.get("refreshToken"):
+        logger.error("Nadeo token refresh returned no refresh token")
         raise UbisoftAuthenticationError(
             "Nadeo token refresh returned no refresh token."
         )
 
+    logger.info("Nadeo service token refreshed successfully")
     return _with_access_token_expiry(payload)
 
 

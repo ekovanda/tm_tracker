@@ -4,6 +4,7 @@
 scratch.ipynb
 __pycache__/
 *.egg-info/
+.coverage
 
 development-docs/
 scripts/

@@ -4,9 +4,12 @@ from dataclasses import dataclass
 import requests
 
 from authentication import get_user_agent
+from logger import get_logger
 from player import PLAYERS, Player
 from tm_lookups import Club
 from track import TRACKS, Track
+
+logger = get_logger("live_services")
 
 REQUEST_TIMEOUT_SECONDS = 30
 LIVE_SERVICES_URL = "https://live-services.trackmania.nadeo.live"
@@ -52,19 +55,26 @@ def _authorization_headers(jwt_token: str) -> dict[str, str]:
 
 
 def _get_json(url: str, headers: dict[str, str], **kwargs) -> object:
+    logger.debug("Live Services GET request", extra={"url": url})
     try:
         response = requests.get(
             url, headers=headers, timeout=REQUEST_TIMEOUT_SECONDS, **kwargs
         )
     except requests.Timeout as error:
+        logger.warning("Live Services request timed out", extra={"url": url})
         raise LiveServiceError(
             "Live Services request timed out.", category="timeout", retryable=True
         ) from error
     except requests.ConnectionError as error:
+        logger.warning("Live Services connection failed", extra={"url": url})
         raise LiveServiceError(
             "Live Services connection failed.", category="connection", retryable=True
         ) from error
     except requests.RequestException as error:
+        logger.warning(
+            "Live Services request failed",
+            extra={"url": url, "error": str(error)},
+        )
         raise LiveServiceError(
             "Live Services request failed.", category="transport", retryable=True
         ) from error
@@ -88,6 +98,16 @@ def _get_json(url: str, headers: dict[str, str], **kwargs) -> object:
                 retry_after = max(0.0, float(raw_retry_after))
             except (TypeError, ValueError):
                 retry_after = None
+        logger.warning(
+            "Live Services returned HTTP error",
+            extra={
+                "url": url,
+                "status_code": status_code,
+                "category": category,
+                "retryable": status_code == 429 or status_code >= 500,
+                "retry_after": retry_after,
+            },
+        )
         raise LiveServiceError(
             f"Live Services returned HTTP {status_code}.",
             category=category,

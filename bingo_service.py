@@ -21,9 +21,12 @@ from bingo import (
     update_bingo_state,
     update_manual_timer,
 )
+from logger import get_logger
 from player import PLAYERS, Player
 from tm_lookups import CLUBS
 from track import Track
+
+logger = get_logger("bingo_service")
 
 SESSION_KEY = "bingo_session"
 MAX_REQUESTS_PER_SECOND = 2
@@ -282,14 +285,26 @@ class PollingCoordinator:
             if not force_refresh:
                 cached = self._cache.get(key)
                 if cached and self._clock() - cached.completed_at < cache_ttl:
+                    logger.debug(
+                        "Leaderboard records served from snapshot cache",
+                        extra={"campaign_id": campaign_id},
+                    )
                     return cached.records
             while key in self._in_flight:
                 self._condition.wait()
                 cached = self._cache.get(key)
                 if cached:
+                    logger.debug(
+                        "Leaderboard records served from in-flight wait",
+                        extra={"campaign_id": campaign_id},
+                    )
                     return cached.records
             self._in_flight.add(key)
 
+        logger.info(
+            "Polling leaderboard records for campaign",
+            extra={"campaign_id": campaign_id, "track_count": len(tracks)},
+        )
         try:
             records = tuple(
                 self._fetch_records(
@@ -339,6 +354,16 @@ class PollingCoordinator:
                         raise
                     delay = error.retry_after or min(
                         backoff_base * (2**attempt), backoff_max
+                    )
+                    logger.warning(
+                        "Retryable LiveServiceError during track poll, backing off",
+                        extra={
+                            "track": track.uid,
+                            "attempt": attempt + 1,
+                            "delay": delay,
+                            "category": error.category,
+                            "status_code": error.status_code,
+                        },
                     )
                     sleep_fn(delay)
         return records
@@ -396,6 +421,7 @@ def start_canonical_game(
 ) -> CanonicalGameState:
     """Load and atomically publish the one active game for all viewers."""
 
+    logger.info("Starting canonical Bingo game", extra={"campaign_id": campaign_id})
     session = start_session(campaign_id, jwt_token, started_at, track_loader, settings)
     return SHARED_CANONICAL_GAME.start(session)
 
@@ -403,12 +429,14 @@ def start_canonical_game(
 def stop_canonical_game() -> CanonicalGameState:
     """Stop the shared game while retaining its final snapshot."""
 
+    logger.info("Stopping canonical Bingo game")
     return SHARED_CANONICAL_GAME.stop()
 
 
 def reset_canonical_game() -> CanonicalGameState:
     """Return the shared game to pending setup."""
 
+    logger.info("Resetting canonical Bingo game to pending setup")
     return SHARED_CANONICAL_GAME.reset()
 
 
@@ -443,6 +471,14 @@ def _new_entries(
             if key in updated_seen:
                 continue
             updated_seen.add(key)
+            logger.info(
+                "Observed new personal best",
+                extra={
+                    "track": track.name,
+                    "player": player.name,
+                    "time": record_time,
+                },
+            )
             entries.append(
                 RecordEntry(
                     observed_at,

@@ -30,6 +30,7 @@ py-modules = [
     "bingo_service",
     "config",
     "live_services",
+    "logger",
     "player",
     "streamlit_app",
     "streamlit_bingo_page",

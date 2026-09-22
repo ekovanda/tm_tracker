@@ -12,6 +12,7 @@ The application is a Python 3.13 Streamlit app with a small functional domain la
 - `bingo.py` contains immutable Bingo state models and pure transitions for board ranking, line detection, session expiry, and manual timer transitions.
 - `live_services.py` is the Nadeo Live Services adapter for campaigns, maps, and club leaderboard data.
 - `authentication.py` handles Ubisoft/Nadeo tokens and constructs the identifying `User-Agent` header.
+- `logger.py` provides structured JSON logging streaming to stdout with GCP Cloud Logging-compatible `severity` levels, timestamps, and contextual metadata.
 - `player.py`, `track.py`, `tm_lookups.py`, and `utils.py` contain configured domain data and small shared helpers.
 
 Tests mirror these boundaries in `tests/`. Streamlit rendering tests use a fake Streamlit surface instead of requiring a running browser.
