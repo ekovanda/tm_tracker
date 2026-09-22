@@ -28,6 +28,7 @@ dev = [
 
 [tool.setuptools]
 py-modules = [
+    "api",
     "authentication",
     "bingo",
     "bingo_service",
