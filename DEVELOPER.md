@@ -4,7 +4,7 @@ This document records the current implementation shape and the decisions that de
 
 ## Architecture
 
-The application is a Python 3.13 Streamlit app with a small functional domain layer:
+The application is a Python 3.13 service supporting both Streamlit and decoupled FastAPI runtime entrypoints with a functional domain layer:
 
 - `streamlit_app.py` configures the wide Streamlit page, gates access with the configured app password, authenticates, displays the packaged version, and calls the page renderer.
 - `streamlit_bingo_page.py` owns Streamlit rendering, session controls, timer controls, and the one-second UI fragment refresh.

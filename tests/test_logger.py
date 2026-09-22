@@ -1,6 +1,6 @@
 import json
 import logging
-from unittest.mock import patch
+import sys
 
 from logger import JsonFormatter, get_logger
 
@@ -51,11 +51,10 @@ def test_json_formatter_extra_fields():
 
 def test_json_formatter_exception():
     formatter = JsonFormatter()
+    exc_info = None
     try:
         raise ValueError("Something broke")
     except ValueError:
-        import sys
-
         exc_info = sys.exc_info()
 
     record = logging.LogRecord(
@@ -86,7 +85,6 @@ def test_json_formatter_exception():
     record_text.exc_text = "Custom traceback string"
     parsed_text = json.loads(formatter.format(record_text))
     assert parsed_text["exception"] == "Custom traceback string"
-
 
 
 def test_get_logger_configures_stream_handler(monkeypatch):
