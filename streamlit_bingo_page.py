@@ -8,7 +8,9 @@ import requests
 import streamlit as st
 
 from authentication import (
+    UbisoftAuthenticationError,
     ensure_nadeo_service_token,
+    get_nadeo_service_token,
     refresh_nadeo_service_token,
 )
 from bingo import (
@@ -169,10 +171,15 @@ def _access_token(now: datetime | None = None) -> str:
 
 
 def _refresh_access_token() -> str:
-    token = st.session_state["nadeo_jwt_token"]
-    if not isinstance(token, dict):
-        raise TypeError("The current token cannot be refreshed.")
-    refreshed = refresh_nadeo_service_token(str(token.get("refreshToken", "")))
+    token = st.session_state.get("nadeo_jwt_token")
+    refreshed = None
+    if isinstance(token, dict) and token.get("refreshToken"):
+        try:
+            refreshed = refresh_nadeo_service_token(str(token["refreshToken"]))
+        except UbisoftAuthenticationError:
+            refreshed = None
+    if refreshed is None:
+        refreshed = get_nadeo_service_token()
     st.session_state["nadeo_jwt_token"] = refreshed
     return str(refreshed["accessToken"])
 
@@ -182,11 +189,11 @@ def _run_live_request(operation, now: datetime):
 
     try:
         return operation(_access_token(now))
-    except (LiveServiceError, requests.HTTPError) as error:
+    except (LiveServiceError, requests.HTTPError, UbisoftAuthenticationError) as error:
         status_code = getattr(error, "status_code", None)
         if isinstance(error, requests.HTTPError) and error.response is not None:
             status_code = error.response.status_code
-        if status_code != 401:
+        if status_code != 401 and not isinstance(error, UbisoftAuthenticationError):
             raise
         return operation(_refresh_access_token())
 
@@ -430,21 +437,36 @@ def _render_active_session_content() -> None:
     )
     last_polled_at = st.session_state.get(LAST_POLLED_KEY)
     if refresh_clicked or poll_is_due(last_polled_at, now):
-        with st.spinner("Refreshing rankings..."):
-            canonical_state = _run_live_request(
-                lambda token: poll_canonical_game(
-                    token,
+        try:
+            with st.spinner("Refreshing rankings..."):
+                canonical_state = _run_live_request(
+                    lambda token: poll_canonical_game(
+                        token,
+                        now,
+                        poll_settings=PollSettings(force_refresh=refresh_clicked),
+                    ),
                     now,
-                    poll_settings=PollSettings(force_refresh=refresh_clicked),
-                ),
-                now,
+                )
+                active_session = canonical_state.session
+                if active_session is not None:
+                    st.session_state[SESSION_KEY] = active_session
+                else:
+                    st.session_state.pop(SESSION_KEY, None)
+            st.session_state[LAST_POLLED_KEY] = now
+            st.session_state.pop("bingo_poll_notice", None)
+        except (
+            LiveServiceError,
+            requests.RequestException,
+            UbisoftAuthenticationError,
+        ) as error:
+            st.session_state[LAST_POLLED_KEY] = (
+                now - POLL_INTERVAL + timedelta(seconds=15)
             )
-            active_session = canonical_state.session
-            if active_session is not None:
-                st.session_state[SESSION_KEY] = active_session
-            else:
-                st.session_state.pop(SESSION_KEY, None)
-        st.session_state[LAST_POLLED_KEY] = now
+            st.session_state["bingo_poll_notice"] = str(error)
+
+    notice = st.session_state.get("bingo_poll_notice")
+    if notice:
+        st.caption(f"⚠️ Leaderboard sync delayed: {notice}. Retrying soon...")
 
     _render_session_metrics(active_session, now)
     _render_board(active_session)

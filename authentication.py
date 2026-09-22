@@ -205,7 +205,6 @@ def refresh_nadeo_service_token(refresh_token: str) -> dict:
     response = requests.post(
         TOKEN_REFRESH_URL,
         headers={
-            "Content-Type": "application/json",
             "Authorization": f"nadeo_v1 t={refresh_token}",
             "User-Agent": get_user_agent(),
         },
@@ -255,7 +254,10 @@ def ensure_nadeo_service_token(
     if current_time.timestamp() + refresh_skew.total_seconds() < expires_at:
         return token
 
-    return refresh_nadeo_service_token(str(token.get("refreshToken", "")))
+    try:
+        return refresh_nadeo_service_token(str(token.get("refreshToken", "")))
+    except UbisoftAuthenticationError:
+        return get_nadeo_service_token()
 
 
 def _with_access_token_expiry(payload: dict) -> dict:

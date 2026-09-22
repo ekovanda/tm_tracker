@@ -84,6 +84,77 @@ def test_live_request_retries_once_after_unauthorized_response():
     }
 
 
+def test_live_request_retries_and_falls_back_to_service_token_when_refresh_fails():
+    fake_st = FakeStreamlit()
+    unauthorized = Mock(status_code=401)
+    error = bingo_page_module.requests.HTTPError(response=unauthorized)
+    operation = Mock(side_effect=[error, "success"])
+
+    with (
+        patch.object(bingo_page_module, "st", fake_st),
+        patch.object(
+            bingo_page_module,
+            "refresh_nadeo_service_token",
+            side_effect=bingo_page_module.UbisoftAuthenticationError(
+                "expired refresh token"
+            ),
+        ),
+        patch.object(
+            bingo_page_module,
+            "get_nadeo_service_token",
+            return_value={
+                "accessToken": "fresh-service-token",
+                "refreshToken": "fresh-refresh",
+            },
+        ) as get_service,
+    ):
+        result = _run_live_request(operation, datetime(2026, 1, 1, tzinfo=UTC))
+
+    assert result == "success"
+    get_service.assert_called_once_with()
+    assert [call.args[0] for call in operation.call_args_list] == [
+        "jwt",
+        "fresh-service-token",
+    ]
+    assert fake_st.session_state["nadeo_jwt_token"] == {
+        "accessToken": "fresh-service-token",
+        "refreshToken": "fresh-refresh",
+    }
+
+
+def test_live_request_retries_after_initial_ubisoft_authentication_error():
+    fake_st = FakeStreamlit()
+    auth_error = bingo_page_module.UbisoftAuthenticationError("ticket missing")
+    operation = Mock(side_effect=[auth_error, "success"])
+
+    with (
+        patch.object(bingo_page_module, "st", fake_st),
+        patch.object(
+            bingo_page_module,
+            "get_nadeo_service_token",
+            return_value={
+                "accessToken": "fresh-token",
+                "refreshToken": "fresh-refresh",
+            },
+        ),
+        patch.object(
+            bingo_page_module,
+            "refresh_nadeo_service_token",
+            return_value={
+                "accessToken": "refreshed",
+                "refreshToken": "refreshed-refresh",
+            },
+        ),
+    ):
+        result = _run_live_request(operation, datetime(2026, 1, 1, tzinfo=UTC))
+
+    assert result == "success"
+    assert [call.args[0] for call in operation.call_args_list] == [
+        "jwt",
+        "refreshed",
+    ]
+
+
 def test_timer_refreshes_every_second_without_shortening_poll_window():
     assert bingo_page_module.TIMER_REFRESH_INTERVAL_SECONDS == 1
     now = datetime(2026, 1, 1, tzinfo=UTC)
@@ -668,3 +739,34 @@ def test_stop_and_reset_controls_delegate_to_service():
         bingo_page()
     reset.assert_called_once_with()
     assert "bingo_session" not in reset_st.session_state
+
+
+def test_render_active_session_backs_off_on_poll_error():
+    track = Track("Track 1", "uid-1", 1)
+    session = BingoSession(
+        "campaign",
+        (track,),
+        BingoState(datetime(2026, 1, 1, tzinfo=UTC)),
+    )
+    get_canonical_game_store().start(session)
+    fake_st = FakeStreamlit({"Refresh rankings": True})
+    fake_st.session_state["bingo_session"] = session
+
+    with (
+        patch.object(bingo_page_module, "st", fake_st),
+        patch.object(
+            bingo_page_module,
+            "poll_canonical_game",
+            side_effect=bingo_page_module.LiveServiceError(
+                "Nadeo network timeout", category="timeout"
+            ),
+        ),
+    ):
+        # pylint: disable=protected-access
+        bingo_page_module._render_active_session_content()
+
+    last_polled = fake_st.session_state["bingo_last_polled_at"]
+    assert isinstance(last_polled, datetime)
+    now = datetime.now(UTC)
+    assert not poll_is_due(last_polled, now)
+    assert "Nadeo network timeout" in fake_st.session_state["bingo_poll_notice"]

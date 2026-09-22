@@ -173,7 +173,6 @@ def test_refresh_replaces_tokens_and_retains_expiry_metadata():
     request.assert_called_once_with(
         "https://prod.trackmania.core.nadeo.online/v2/authentication/token/refresh",
         headers={
-            "Content-Type": "application/json",
             "Authorization": "nadeo_v1 t=old-refresh",
             "User-Agent": get_user_agent(),
         },
@@ -205,3 +204,34 @@ def test_ensure_token_refreshes_near_expiry_but_keeps_valid_token():
         ) == {"accessToken": "new", "refreshToken": "new-refresh"}
 
     refresh.assert_called_once_with("refresh")
+
+
+def test_ensure_token_falls_back_to_service_token_when_refresh_fails():
+    expired = {
+        "accessToken": jwt_for(1_800_000_100),
+        "refreshToken": "broken-refresh",
+    }
+    now = datetime.fromtimestamp(1_800_000_000, UTC)
+
+    with (
+        patch(
+            "authentication.refresh_nadeo_service_token",
+            side_effect=UbisoftAuthenticationError("refresh failed"),
+        ),
+        patch(
+            "authentication.get_nadeo_service_token",
+            return_value={
+                "accessToken": "fresh-service-token",
+                "refreshToken": "fresh-refresh",
+            },
+        ) as get_service,
+    ):
+        result = ensure_nadeo_service_token(
+            expired, now, refresh_skew=timedelta(minutes=5)
+        )
+
+    get_service.assert_called_once_with()
+    assert result == {
+        "accessToken": "fresh-service-token",
+        "refreshToken": "fresh-refresh",
+    }
