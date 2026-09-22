@@ -1,8 +1,8 @@
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
-import pytest
 
+import live_services
 from api import (
     APPLICATION_VERSION,
     app,
@@ -10,7 +10,8 @@ from api import (
     set_cached_service_token,
 )
 from authentication import PasswordConfigurationError, UbisoftAuthenticationError
-import live_services
+from player import PLAYERS
+from track import Track
 
 client = TestClient(app)
 
@@ -72,7 +73,10 @@ def test_get_campaigns_success():
 
 
 def test_get_campaigns_authentication_error():
-    with patch("api.get_current_service_token", side_effect=UbisoftAuthenticationError("Auth failed")):
+    with patch(
+        "api.get_current_service_token",
+        side_effect=UbisoftAuthenticationError("Auth failed"),
+    ):
         response = client.get("/api/campaigns")
         assert response.status_code == 502
         assert "Failed to authenticate" in response.json()["detail"]
@@ -83,7 +87,9 @@ def test_get_campaigns_live_service_error():
     try:
         with patch(
             "live_services.get_official_campaigns",
-            side_effect=live_services.LiveServiceError("API down", category="server", status_code=500),
+            side_effect=live_services.LiveServiceError(
+                "API down", category="server", status_code=500
+            ),
         ):
             response = client.get("/api/campaigns")
             assert response.status_code == 502
@@ -98,7 +104,169 @@ def test_get_current_service_token_logic():
         token = get_current_service_token()
         assert token == "token_1"
 
-    with patch("api.ensure_nadeo_service_token", return_value={"accessToken": "token_refreshed"}):
+    with patch(
+        "api.ensure_nadeo_service_token",
+        return_value={"accessToken": "token_refreshed"},
+    ):
         token = get_current_service_token()
         assert token == "token_refreshed"
     set_cached_service_token(None)
+
+
+# Game Lifecycle & Timer Tests
+
+
+def test_get_game_state_pending():
+    response = client.get("/api/game")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "pending"
+    assert data["session"] is None
+    assert "pending" in data
+    assert "settings" in data["pending"]
+
+
+def test_configure_game():
+    response = client.post(
+        "/api/game/configure",
+        json={
+            "campaign_id": "test_campaign",
+            "board_seed": 42,
+            "game_duration_minutes": 180,
+            "grace_period_minutes": 15,
+            "manual_timer_duration_minutes": 5,
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["pending"]["campaign_id"] == "test_campaign"
+    assert data["pending"]["settings"]["board_seed"] == 42
+    assert data["pending"]["settings"]["game_duration_seconds"] == 180 * 60
+    assert data["pending"]["settings"]["grace_period_seconds"] == 15 * 60
+    assert data["pending"]["settings"]["manual_timer_duration_seconds"] == 5 * 60
+
+
+def test_start_game_validation():
+    # If no campaign is configured or provided
+    client.post("/api/game/reset")
+    client.post("/api/game/configure", json={"campaign_id": None})
+    response = client.post("/api/game/start", json={})
+    assert response.status_code == 400
+    assert "A campaign_id must be selected" in response.json()["detail"]
+
+
+def test_game_full_lifecycle():
+    fake_tracks = [
+        Track(str(num), f"Track {num}", number=num)
+        for num in (1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 16, 17, 18, 19)
+    ]
+
+    client.post("/api/game/reset")
+    set_cached_service_token({"accessToken": "fake_token"})
+    try:
+        with patch(
+            "live_services.get_playable_campaign_tracks", return_value=fake_tracks
+        ):
+            # 1. Start game
+            start_resp = client.post(
+                "/api/game/start",
+                json={"campaign_id": "summer_2026", "board_seed": 10},
+            )
+            assert start_resp.status_code == 200
+            game_data = start_resp.json()
+            assert game_data["status"] == "active"
+            assert game_data["session"]["campaign_id"] == "summer_2026"
+            assert len(game_data["session"]["board"]) == 4
+
+            # 2. Starting again causes 409 Conflict
+            duplicate_start = client.post(
+                "/api/game/start", json={"campaign_id": "summer_2026"}
+            )
+            assert duplicate_start.status_code == 409
+
+            # 3. Configure while active causes 409 Conflict
+            configure_active = client.post(
+                "/api/game/configure", json={"board_seed": 99}
+            )
+            assert configure_active.status_code == 409
+
+            # 4. Poll game
+            with patch(
+                "bingo_service._live_record_loader",
+                return_value={"track": fake_tracks[0], "players": []},
+            ):
+                poll_resp = client.post("/api/game/poll")
+                assert poll_resp.status_code == 200
+
+            # 5. Stop game
+            stop_resp = client.post("/api/game/stop")
+            assert stop_resp.status_code == 200
+            assert stop_resp.json()["status"] == "stopped"
+
+            # 6. Stop when already stopped causes 400
+            stop_again = client.post("/api/game/stop")
+            assert (
+                stop_again.status_code == 200
+            )  # stopping an already stopped game retains stopped snapshot
+
+            # 7. Reset game
+            reset_resp = client.post("/api/game/reset")
+            assert reset_resp.status_code == 200
+            assert reset_resp.json()["status"] == "pending"
+
+            # 8. Stop after reset causes 400
+            stop_after_reset = client.post("/api/game/stop")
+            assert stop_after_reset.status_code == 400
+    finally:
+        set_cached_service_token(None)
+        client.post("/api/game/reset")
+
+
+def test_timers_lifecycle():
+    player_eljay = PLAYERS[0]
+
+    # Get timers
+    timers_resp = client.get("/api/timers")
+    assert timers_resp.status_code == 200
+    timers_data = timers_resp.json()
+    assert len(timers_data) == 3
+
+    # Unknown player 404
+    unknown_resp = client.post(
+        "/api/timers/nonexistent_id/action", json={"action": "start"}
+    )
+    assert unknown_resp.status_code == 404
+
+    # Invalid action 400
+    invalid_resp = client.post(
+        f"/api/timers/{player_eljay.account_id}/action",
+        json={"action": "dance"},
+    )
+    assert invalid_resp.status_code == 400
+
+    # Start timer
+    start_resp = client.post(
+        f"/api/timers/{player_eljay.account_id}/action",
+        json={"action": "start"},
+    )
+    assert start_resp.status_code == 200
+    assert start_resp.json()["status"] == "active"
+
+    # Stop timer
+    stop_resp = client.post(
+        f"/api/timers/{player_eljay.account_id}/action",
+        json={"action": "stop"},
+    )
+    assert stop_resp.status_code == 200
+    assert stop_resp.json()["status"] == "stopped"
+
+    # Restart timer
+    restart_resp = client.post(
+        f"/api/timers/{player_eljay.account_id}/action",
+        json={"action": "restart"},
+    )
+    assert restart_resp.status_code == 200
+    assert restart_resp.json()["status"] == "active"
+
+    # Reset cleans up
+    client.post("/api/game/reset")

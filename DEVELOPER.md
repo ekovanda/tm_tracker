@@ -12,7 +12,7 @@ The application is a Python 3.13 service supporting both Streamlit and decoupled
 - `bingo.py` contains immutable Bingo state models and pure transitions for board ranking, line detection, session expiry, and manual timer transitions.
 - `live_services.py` is the Nadeo Live Services adapter for campaigns, maps, and club leaderboard data.
 - `authentication.py` handles Ubisoft/Nadeo tokens and constructs the identifying `User-Agent` header.
-- `api.py` provides the FastAPI application entrypoint with structured request logging middleware and endpoints for health, version, authentication verification, and campaigns.
+- `api.py` provides the FastAPI application entrypoint with structured request logging middleware and endpoints for health, version, authentication verification, campaigns, canonical game lifecycle (`/api/game`, `/api/game/configure`, `/api/game/start`, `/api/game/stop`, `/api/game/reset`, `/api/game/poll`), and player timers (`/api/timers`, `/api/timers/{account_id}/action`).
 - `logger.py` provides structured JSON logging streaming to stdout with GCP Cloud Logging-compatible `severity` levels, timestamps, and contextual metadata.
 - `player.py`, `track.py`, `tm_lookups.py`, and `utils.py` contain configured domain data and small shared helpers.
 
