@@ -1,3 +1,5 @@
+import asyncio
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
@@ -7,8 +9,13 @@ from api import (
     APPLICATION_VERSION,
     app,
     get_current_service_token,
+    get_last_poll_time,
     init_storage,
+    lifespan,
+    poll_is_due,
+    run_background_poll_once,
     set_cached_service_token,
+    set_last_poll_time,
 )
 from authentication import (
     PasswordConfigurationError,
@@ -570,3 +577,75 @@ def test_full_interactive_frontend_flow():
     finally:
         set_cached_service_token(None)
         client.post("/api/game/reset")
+
+
+def test_poll_is_due_logic():
+    now = datetime.now(UTC)
+    assert poll_is_due(None, now)
+    assert not poll_is_due(now, now + timedelta(seconds=10), interval_seconds=60.0)
+    assert poll_is_due(now, now + timedelta(seconds=61), interval_seconds=60.0)
+
+
+def test_last_poll_time_get_set():
+    now = datetime.now(UTC)
+    set_last_poll_time(now)
+    assert get_last_poll_time() == now
+    set_last_poll_time(None)
+    assert get_last_poll_time() is None
+
+
+def test_run_background_poll_once_inactive_session():
+    client.post("/api/game/reset")
+    set_last_poll_time(None)
+    result = asyncio.run(run_background_poll_once())
+    assert result is False
+
+
+def test_run_background_poll_once_active_session():
+    client.post("/api/game/reset")
+    set_cached_service_token({"accessToken": "fake_token"})
+    sample_tracks = [
+        Track(str(num), f"Track {num}", number=num)
+        for num in [1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 16, 17, 18, 19]
+    ]
+    with patch("live_services.get_campaign_tracks", return_value=sample_tracks):
+        start_resp = client.post(
+            "/api/game/start", json={"campaign_id": "test_bg_camp"}
+        )
+        assert start_resp.status_code == 200
+
+    try:
+        now = datetime.now(UTC)
+        result = asyncio.run(run_background_poll_once(now=now, interval_seconds=60.0))
+        assert result is False
+
+        future = now + timedelta(seconds=65)
+        with patch("api.poll_canonical_game") as mock_poll:
+            result = asyncio.run(
+                run_background_poll_once(now=future, interval_seconds=60.0)
+            )
+            assert result is True
+            mock_poll.assert_called_once()
+            assert get_last_poll_time() == future
+
+        future_error = future + timedelta(seconds=65)
+        with patch(
+            "api.poll_canonical_game",
+            side_effect=live_services.LiveServiceError("API error", category="server"),
+        ):
+            result = asyncio.run(
+                run_background_poll_once(now=future_error, interval_seconds=60.0)
+            )
+            assert result is False
+            assert get_last_poll_time() == future_error
+    finally:
+        set_cached_service_token(None)
+        client.post("/api/game/reset")
+
+
+def test_lifespan_starts_and_cancels_background_poller():
+    async def run_lifespan():
+        async with lifespan(app):
+            await asyncio.sleep(0.01)
+
+    asyncio.run(run_lifespan())

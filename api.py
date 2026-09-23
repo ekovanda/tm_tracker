@@ -1,8 +1,9 @@
 """FastAPI service entrypoint for Trackmania Tracker."""
 
+import asyncio
 import time
 from collections.abc import Awaitable, Callable
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from datetime import UTC, datetime, timedelta
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
@@ -75,15 +76,98 @@ def init_storage(persistence: Any = None) -> None:
         logger.info("Storage initialized: clean pending state")
 
 
+BACKGROUND_POLL_INTERVAL_SECONDS = 60.0
+BACKGROUND_POLL_CHECK_INTERVAL_SECONDS = 5.0
+_POLL_STATE: dict[str, datetime | None] = {"last_polled_at": None}
+
+
+def get_last_poll_time() -> datetime | None:
+    """Return the timestamp of the most recent leaderboard poll."""
+    return _POLL_STATE["last_polled_at"]
+
+
+def set_last_poll_time(timestamp: datetime | None) -> None:
+    """Update or clear the timestamp of the most recent leaderboard poll."""
+    _POLL_STATE["last_polled_at"] = timestamp
+
+
+def poll_is_due(
+    last_polled_at: datetime | None,
+    now: datetime,
+    interval_seconds: float = BACKGROUND_POLL_INTERVAL_SECONDS,
+) -> bool:
+    """Return whether the leaderboard poll interval has elapsed."""
+    if last_polled_at is None:
+        return True
+    return (now - last_polled_at).total_seconds() >= interval_seconds
+
+
+async def run_background_poll_once(
+    now: datetime | None = None,
+    interval_seconds: float = BACKGROUND_POLL_INTERVAL_SECONDS,
+) -> bool:
+    """Execute a single leaderboard poll if a game session is currently active and due."""
+    current_time = now or datetime.now(UTC)
+    snapshot = SHARED_CANONICAL_GAME.get()
+    if snapshot.session is None or snapshot.session.state.status != "active":
+        return False
+
+    if not poll_is_due(get_last_poll_time(), current_time, interval_seconds):
+        return False
+
+    try:
+        token = await asyncio.to_thread(get_current_service_token)
+        await asyncio.to_thread(poll_canonical_game, token, current_time)
+        set_last_poll_time(current_time)
+        logger.info(
+            "Background leaderboard poll completed successfully",
+            extra={"polled_at": current_time.isoformat()},
+        )
+        return True
+    except (
+        UbisoftAuthenticationError,
+        live_services.LiveServiceError,
+        RuntimeError,
+        OSError,
+    ) as error:
+        logger.warning(
+            "Background leaderboard poll failed",
+            extra={"error": str(error)},
+        )
+        set_last_poll_time(current_time)
+        return False
+
+
+async def background_polling_loop(
+    check_interval_seconds: float = BACKGROUND_POLL_CHECK_INTERVAL_SECONDS,
+    poll_interval_seconds: float = BACKGROUND_POLL_INTERVAL_SECONDS,
+) -> None:
+    """Periodically monitor the canonical game session and trigger leaderboard polls when due."""
+    logger.info("Starting background leaderboard poller loop")
+    try:
+        while True:
+            await asyncio.sleep(check_interval_seconds)
+            await run_background_poll_once(interval_seconds=poll_interval_seconds)
+    except asyncio.CancelledError:
+        logger.info("Background leaderboard poller loop cancelled")
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    """Lifespan context manager ensuring storage is initialized and rehydrated."""
+    """Lifespan context manager ensuring storage is initialized and poller runs."""
 
     if not SHARED_CANONICAL_GAME.has_persistence:
         init_storage()
     else:
         SHARED_CANONICAL_GAME.rehydrate()
-    yield
+
+    poller_task = asyncio.create_task(background_polling_loop())
+    try:
+        yield
+    finally:
+        poller_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await poller_task
 
 
 app = FastAPI(
@@ -440,6 +524,7 @@ def _serialize_canonical_game(
         raw_board = ()
 
     medal_counts, rank_points = _compute_player_medals(raw_board)
+    last_polled = get_last_poll_time()
 
     return {
         "status": state.status,
@@ -460,6 +545,9 @@ def _serialize_canonical_game(
             "records": [_serialize_record(r) for r in session.records],
             "medal_counts": medal_counts,
             "rank_points": rank_points,
+            "last_polled_at": (
+                last_polled.isoformat() if last_polled is not None else None
+            ),
         },
     }
 
@@ -633,7 +721,9 @@ def start_game(payload: StartGameRequest) -> dict[str, Any]:
             detail=str(error),
         ) from error
 
-    return _serialize_canonical_game(updated, datetime.now(UTC))
+    now = datetime.now(UTC)
+    set_last_poll_time(now)
+    return _serialize_canonical_game(updated, now)
 
 
 @app.post("/api/game/stop", dependencies=[Depends(require_auth)], tags=["game"])
@@ -647,6 +737,7 @@ def stop_game() -> dict[str, Any]:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(error),
         ) from error
+    set_last_poll_time(None)
     return _serialize_canonical_game(updated, datetime.now(UTC))
 
 
@@ -656,6 +747,7 @@ def reset_game() -> dict[str, Any]:
 
     updated = reset_canonical_game()
     SHARED_MANUAL_TIMER.reset()
+    set_last_poll_time(None)
     return _serialize_canonical_game(updated, datetime.now(UTC))
 
 
@@ -663,18 +755,20 @@ def reset_game() -> dict[str, Any]:
 def poll_game() -> dict[str, Any]:
     """Poll leaderboards and apply updates to the canonical session."""
 
+    now = datetime.now(UTC)
     snapshot = SHARED_CANONICAL_GAME.get()
     if snapshot.session is None or snapshot.session.state.status != "active":
-        return _serialize_canonical_game(snapshot, datetime.now(UTC))
+        return _serialize_canonical_game(snapshot, now)
 
     try:
         token = get_current_service_token()
-        updated = poll_canonical_game(token, datetime.now(UTC))
+        updated = poll_canonical_game(token, now)
+        set_last_poll_time(now)
     except (UbisoftAuthenticationError, live_services.LiveServiceError) as error:
         logger.warning("Poll game failed", extra={"error": str(error)})
-        return _serialize_canonical_game(snapshot, datetime.now(UTC))
+        return _serialize_canonical_game(snapshot, now)
 
-    return _serialize_canonical_game(updated, datetime.now(UTC))
+    return _serialize_canonical_game(updated, now)
 
 
 @app.get("/api/timers", tags=["timers"])
