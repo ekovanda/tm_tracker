@@ -7,4 +7,6 @@ __pycache__/
 .coverage
 
 development-docs/
+development_docs/
+DEVELOPER.md
 scripts/

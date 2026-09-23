@@ -75,18 +75,37 @@ uv run --active streamlit run streamlit_app.py
 
 ## Deployment to Google Cloud Run
 
-The application is containerized with a production-ready `Dockerfile` and deploys seamlessly to GCP Cloud Run:
+The application is containerized with a production-ready `Dockerfile` and deploys seamlessly to GCP Cloud Run.
+
+### Building & Pushing the Container Image
+
+Build and push the image to Artifact Registry (replace `<PROJECT_ID>` and `<REGION>` with your GCP project and preferred region):
+
+```bash
+# Using Cloud Build (no local Docker daemon required):
+gcloud builds submit --tag <REGION>-docker.pkg.dev/<PROJECT_ID>/tm-bingo-repo/tm-tracker:latest
+
+# Or using local Docker:
+gcloud auth configure-docker <REGION>-docker.pkg.dev
+docker build -t <REGION>-docker.pkg.dev/<PROJECT_ID>/tm-bingo-repo/tm-tracker:latest .
+docker push <REGION>-docker.pkg.dev/<PROJECT_ID>/tm-bingo-repo/tm-tracker:latest
+```
+
+### Cloud Run Deployment Command
+
+Deploy the pushed image from Artifact Registry:
 
 ```bash
 gcloud run deploy tm-tracker \
-  --source . \
+  --image <REGION>-docker.pkg.dev/<PROJECT_ID>/tm-bingo-repo/tm-tracker:latest \
   --platform managed \
-  --region europe-west1 \
+  --region <REGION> \
   --allow-unauthenticated \
   --port 8080 \
   --max-instances 1 \
   --timeout 3600 \
-  --set-secrets BASIC_AUTH=tm-basic-auth:latest,APP_PASSWORD_HASH=tm-password-hash:latest
+  --service-account "tm-bingo-tracker-runner@<PROJECT_ID>.iam.gserviceaccount.com" \
+  --set-secrets BASIC_AUTH=tm-bingo-basic-auth:latest,APP_PASSWORD_HASH=tm-bingo-password-hash:latest
 ```
 
 ### Key Cloud Run Deployment Flags
