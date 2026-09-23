@@ -652,7 +652,7 @@
       if (!Array.isArray(records) || records.length === 0) {
         feed.innerHTML = `
           <div class="record-empty">
-            <span class="empty-icon">⏱️</span>
+            <span class="empty-icon"><span class="emoji">⏱️</span></span>
             <p>No personal bests recorded yet.</p>
             <p class="empty-hint">New records will appear here live during the challenge.</p>
           </div>
