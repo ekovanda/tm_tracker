@@ -2,6 +2,7 @@
 
 import time
 from collections.abc import Awaitable, Callable
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from importlib.metadata import PackageNotFoundError, version
 from threading import Lock
@@ -42,6 +43,7 @@ from bingo_service import (
 )
 from logger import get_logger
 from player import PLAYERS, Player
+from storage import create_game_state_store
 from track import Track
 
 logger = get_logger("api")
@@ -56,11 +58,37 @@ def _application_version() -> str:
 
 APPLICATION_VERSION = _application_version()
 
+
+def init_storage(persistence: Any = None) -> None:
+    """Wire persistence and rehydrate in-flight session and player timers."""
+
+    store = persistence if persistence is not None else create_game_state_store()
+    SHARED_CANONICAL_GAME.set_persistence(store, SHARED_MANUAL_TIMER)
+    if SHARED_CANONICAL_GAME.rehydrate():
+        logger.info("Storage initialized: rehydrated active session from persistence")
+    else:
+        logger.info("Storage initialized: clean pending state")
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    """Lifespan context manager ensuring storage is initialized and rehydrated."""
+
+    if not SHARED_CANONICAL_GAME.has_persistence:
+        init_storage()
+    else:
+        SHARED_CANONICAL_GAME.rehydrate()
+    yield
+
+
 app = FastAPI(
     title="Trackmania Bingo API",
     version=APPLICATION_VERSION,
     description="Decoupled backend API for Trackmania Bingo",
+    lifespan=lifespan,
 )
+
+init_storage()
 
 app.add_middleware(
     CORSMiddleware,

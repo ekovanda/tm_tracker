@@ -7,10 +7,18 @@ from api import (
     APPLICATION_VERSION,
     app,
     get_current_service_token,
+    init_storage,
     set_cached_service_token,
 )
 from authentication import PasswordConfigurationError, UbisoftAuthenticationError
+from bingo import ManualTimerState
+from bingo_service import (
+    SHARED_CANONICAL_GAME,
+    SHARED_MANUAL_TIMER,
+    CanonicalGameState,
+)
 from player import PLAYERS
+from storage import InMemoryGameStateStore
 from track import Track
 
 client = TestClient(app)
@@ -270,3 +278,79 @@ def test_timers_lifecycle():
 
     # Reset cleans up
     client.post("/api/game/reset")
+
+
+def test_api_rehydration_on_startup():
+    mem_store = InMemoryGameStateStore()
+    init_storage(mem_store)
+
+    fake_tracks = [
+        Track(str(num), f"Track {num}", number=num)
+        for num in (1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 16, 17, 18, 19)
+    ]
+    set_cached_service_token({"accessToken": "fake_token"})
+    try:
+        with patch(
+            "live_services.get_playable_campaign_tracks", return_value=fake_tracks
+        ):
+            start_resp = client.post(
+                "/api/game/start",
+                json={
+                    "campaign_id": "rehydrate_camp",
+                    "board_seed": 123,
+                    "grace_period_minutes": 0,
+                },
+            )
+            assert start_resp.status_code == 200
+
+            # Start timer for player 0
+            p0 = PLAYERS[0]
+            timer_resp = client.post(
+                f"/api/timers/{p0.account_id}/action",
+                json={"action": "start"},
+            )
+            assert timer_resp.status_code == 200
+            assert timer_resp.json()["status"] == "active"
+
+            # Simulate complete server crash / restart:
+            # Wipe in-memory process state without checkpointing
+            SHARED_CANONICAL_GAME._state = CanonicalGameState()  # pylint: disable=protected-access
+            SHARED_MANUAL_TIMER._states = {  # pylint: disable=protected-access
+                player.account_id: ManualTimerState() for player in PLAYERS
+            }
+            assert SHARED_CANONICAL_GAME.get().session is None
+
+            # Server startup rehydration
+            rehydrated = SHARED_CANONICAL_GAME.rehydrate()
+            assert rehydrated is True
+
+            # Verify through API endpoints that state was rehydrated
+            game_resp = client.get("/api/game")
+            assert game_resp.status_code == 200
+            game_data = game_resp.json()
+            assert game_data["status"] == "active"
+            assert game_data["session"]["campaign_id"] == "rehydrate_camp"
+
+            timers_resp = client.get("/api/timers")
+            assert timers_resp.status_code == 200
+            t_data = {t["player"]["account_id"]: t for t in timers_resp.json()}
+            assert t_data[p0.account_id]["status"] == "active"
+
+            # Reset clears in-flight session
+            client.post("/api/game/reset")
+            assert SHARED_CANONICAL_GAME.get().session is None
+
+            # Rehydrating after reset finds no active session
+            assert not SHARED_CANONICAL_GAME.rehydrate()
+            assert client.get("/api/game").json()["status"] == "pending"
+    finally:
+        set_cached_service_token(None)
+        client.post("/api/game/reset")
+
+
+def test_api_lifespan_handler():
+    mem_store = InMemoryGameStateStore()
+    init_storage(mem_store)
+    with TestClient(app) as test_client:
+        resp = test_client.get("/health")
+        assert resp.status_code == 200

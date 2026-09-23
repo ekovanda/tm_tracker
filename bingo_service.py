@@ -5,6 +5,7 @@ from collections.abc import Callable, Iterable, MutableMapping
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from threading import Condition, Lock
+from typing import Any
 
 import live_services
 from authentication import decode_jwt_payload
@@ -48,6 +49,17 @@ class ManualTimerStore:
     def __init__(self) -> None:
         self._states = {player.account_id: ManualTimerState() for player in PLAYERS}
         self._lock = Lock()
+        self._on_change: Callable[[], None] | None = None
+
+    def set_on_change(self, callback: Callable[[], None] | None) -> None:
+        with self._lock:
+            self._on_change = callback
+
+    def load_states(self, states: dict[str, ManualTimerState]) -> None:
+        with self._lock:
+            for account_id, state in states.items():
+                if account_id in self._states:
+                    self._states[account_id] = state
 
     def get(self, player: Player, now: datetime) -> ManualTimerState:
         with self._lock:
@@ -61,6 +73,10 @@ class ManualTimerStore:
                 self._states[player.account_id] = update_manual_timer(
                     self._states[player.account_id], now
                 )
+            return self._states.copy()
+
+    def get_raw_states(self) -> dict[str, ManualTimerState]:
+        with self._lock:
             return self._states.copy()
 
     def start(
@@ -78,13 +94,19 @@ class ManualTimerStore:
                 duration,
             )
             self._states[player.account_id] = state
-            return state
+            cb = self._on_change
+        if cb is not None:
+            cb()
+        return state
 
     def stop(self, player: Player) -> ManualTimerState:
         with self._lock:
             state = stop_manual_timer(self._states[player.account_id])
             self._states[player.account_id] = state
-            return state
+            cb = self._on_change
+        if cb is not None:
+            cb()
+        return state
 
     def restart(
         self,
@@ -101,12 +123,19 @@ class ManualTimerStore:
                 duration,
             )
             self._states[player.account_id] = state
-            return state
+            cb = self._on_change
+        if cb is not None:
+            cb()
+        return state
 
     def reset(self) -> dict[str, ManualTimerState]:
         with self._lock:
             self._states = {player.account_id: ManualTimerState() for player in PLAYERS}
-            return self._states.copy()
+            copied = self._states.copy()
+            cb = self._on_change
+        if cb is not None:
+            cb()
+        return copied
 
 
 SHARED_MANUAL_TIMER = ManualTimerStore()
@@ -160,9 +189,70 @@ class CanonicalGameNotStartedError(RuntimeError):
 class CanonicalGameStore:
     """Thread-safe in-memory boundary for the one canonical Bingo game."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        persistence: Any = None,
+        timer_store: ManualTimerStore | None = None,
+    ) -> None:
         self._state = CanonicalGameState()
         self._lock = Lock()
+        self._persistence = persistence
+        self._timer_store = timer_store
+        if self._timer_store is not None:
+            self._timer_store.set_on_change(self.checkpoint)
+        if self._persistence is not None:
+            self.rehydrate()
+
+    @property
+    def has_persistence(self) -> bool:
+        with self._lock:
+            return self._persistence is not None
+
+    def set_persistence(
+        self,
+        persistence: Any,
+        timer_store: ManualTimerStore | None = None,
+    ) -> None:
+        """Configure persistence backend and optional timer store."""
+
+        with self._lock:
+            self._persistence = persistence
+            if timer_store is not None:
+                self._timer_store = timer_store
+                self._timer_store.set_on_change(self.checkpoint)
+
+    def checkpoint(self) -> None:
+        """Persist current canonical game state and player timers."""
+
+        with self._lock:
+            if self._persistence is None:
+                return
+            current_state = self._state
+
+        timers = None
+        if self._timer_store is not None:
+            timers = self._timer_store.get_raw_states()
+        self._persistence.save_state(current_state, timers)
+
+    def rehydrate(self) -> bool:
+        """Rehydrate canonical game and player timers from persistence."""
+
+        with self._lock:
+            persistence = self._persistence
+        if persistence is None:
+            return False
+
+        persisted = persistence.load_state()
+        if persisted is None:
+            return False
+
+        with self._lock:
+            self._state = persisted.canonical_game
+
+        if self._timer_store is not None and persisted.timers:
+            self._timer_store.load_states(persisted.timers)
+
+        return persisted.canonical_game.session is not None
 
     def get(self) -> CanonicalGameState:
         """Return the current immutable game snapshot."""
@@ -179,7 +269,9 @@ class CanonicalGameStore:
                     "The canonical Bingo game has already started."
                 )
             self._state = replace(self._state, pending=pending)
-            return self._state
+            state = self._state
+        self.checkpoint()
+        return state
 
     def start(self, session: BingoSession) -> CanonicalGameState:
         """Atomically establish the first active session for all viewers."""
@@ -195,7 +287,9 @@ class CanonicalGameStore:
                 PendingGame(session.campaign_id, session.state.settings),
                 session,
             )
-            return self._state
+            state = self._state
+        self.checkpoint()
+        return state
 
     def stop(self) -> CanonicalGameState:
         """Stop the canonical game without removing its final state."""
@@ -207,14 +301,18 @@ class CanonicalGameStore:
                     "No canonical Bingo game has started."
                 )
             self._state = replace(self._state, session=stop_session(session))
-            return self._state
+            state = self._state
+        self.checkpoint()
+        return state
 
     def reset(self) -> CanonicalGameState:
         """Return to pending setup while retaining the shared configuration."""
 
         with self._lock:
             self._state = replace(self._state, session=None)
-            return self._state
+            state = self._state
+        self.checkpoint()
+        return state
 
     def update_session(
         self, updater: Callable[[BingoSession], BingoSession]
@@ -228,10 +326,12 @@ class CanonicalGameStore:
                     "No canonical Bingo game has started."
                 )
             self._state = replace(self._state, session=updater(session))
-            return self._state
+            state = self._state
+        self.checkpoint()
+        return state
 
 
-SHARED_CANONICAL_GAME = CanonicalGameStore()
+SHARED_CANONICAL_GAME = CanonicalGameStore(timer_store=SHARED_MANUAL_TIMER)
 
 
 def get_canonical_game_store() -> CanonicalGameStore:
