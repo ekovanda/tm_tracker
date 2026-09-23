@@ -370,6 +370,62 @@ def test_firestore_store_edge_cases():
     assert store_clear_fb.is_using_fallback
 
 
+def test_firestore_transient_failure_recovery():
+    mock_client = MagicMock()
+    mock_collection = MagicMock()
+    mock_doc = MagicMock()
+    mock_client.collection.return_value = mock_collection
+    mock_collection.document.return_value = mock_doc
+
+    store = FirestoreGameStateStore(
+        client=mock_client,
+        collection_name="col",
+        document_id="doc",
+        fallback_to_memory=True,
+    )
+    assert not store.is_using_fallback
+
+    # 1. Transient write error
+    mock_doc.set.side_effect = Exception("Transient 503 Service Unavailable")
+    game_state = CanonicalGameState(pending=PendingGame(campaign_id="camp-transient"))
+    store.save_state(game_state)
+
+    # In fallback state temporarily, but client remains attached
+    assert store.is_using_fallback
+
+    # 2. Connectivity recovers on next write
+    mock_doc.set.side_effect = None
+    store.save_state(game_state)
+    assert not store.is_using_fallback
+    assert mock_doc.set.call_count == 2
+
+    # 3. Transient read error falls back to memory backup without destroying client
+    mock_doc.get.side_effect = Exception("Transient timeout")
+    loaded = store.load_state()
+    assert loaded is not None
+    assert loaded.canonical_game.pending.campaign_id == "camp-transient"
+    assert store.is_using_fallback
+
+    # 4. Read recovers
+    mock_snapshot = MagicMock()
+    mock_snapshot.exists = True
+    mock_snapshot.to_dict.return_value = serialize_game_state(game_state)
+    mock_doc.get.side_effect = None
+    mock_doc.get.return_value = mock_snapshot
+    recovered = store.load_state()
+    assert recovered is not None
+    assert not store.is_using_fallback
+
+    # 5. Delete transient error and recovery
+    mock_doc.delete.side_effect = Exception("Transient error")
+    store.clear_state()
+    assert store.is_using_fallback
+    mock_doc.delete.side_effect = None
+    store.clear_state()
+    assert not store.is_using_fallback
+    assert mock_doc.delete.call_count == 2
+
+
 def test_create_game_state_store_factory():
     with patch("google.cloud.firestore.Client") as mock_init:
         mock_init.return_value = MagicMock()

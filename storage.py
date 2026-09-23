@@ -377,6 +377,8 @@ class FirestoreGameStateStore(GameStatePersistence):
         self._document_id = document_id
         self._fallback_to_memory = fallback_to_memory
         self._fallback_store: InMemoryGameStateStore | None = None
+        self._memory_backup = InMemoryGameStateStore()
+        self._consecutive_failures = 0
         self._client = client
 
         if self._client is None:
@@ -404,7 +406,7 @@ class FirestoreGameStateStore(GameStatePersistence):
 
     @property
     def is_using_fallback(self) -> bool:
-        return self._fallback_store is not None
+        return self._fallback_store is not None or self._consecutive_failures > 0
 
     def save_state(
         self,
@@ -421,14 +423,17 @@ class FirestoreGameStateStore(GameStatePersistence):
                 self._document_id
             )
             doc_ref.set(payload)
+            self._consecutive_failures = 0
+            self._memory_backup.save_state(game_state, timers)
         except Exception as exc:  # pylint: disable=broad-exception-caught
             if self._fallback_to_memory:
+                self._consecutive_failures += 1
                 logger.warning(
-                    "Firestore write failed (%s); switching to in-memory fallback",
+                    "Firestore write failed (%s); saved to in-memory backup (failures=%d)",
                     exc,
+                    self._consecutive_failures,
                 )
-                self._fallback_store = InMemoryGameStateStore()
-                self._fallback_store.save_state(game_state, timers)
+                self._memory_backup.save_state(game_state, timers)
             else:
                 raise
 
@@ -441,20 +446,28 @@ class FirestoreGameStateStore(GameStatePersistence):
                 self._document_id
             )
             snapshot = doc_ref.get()
+            self._consecutive_failures = 0
             if not snapshot.exists:
+                self._memory_backup.clear_state()
                 return None
             data = snapshot.to_dict()
             if not data:
                 return None
-            return deserialize_game_state(data)
+            persisted = deserialize_game_state(data)
+            if persisted:
+                self._memory_backup.save_state(
+                    persisted.canonical_game, persisted.timers
+                )
+            return persisted
         except Exception as exc:  # pylint: disable=broad-exception-caught
             if self._fallback_to_memory:
+                self._consecutive_failures += 1
                 logger.warning(
-                    "Firestore read failed (%s); switching to in-memory fallback",
+                    "Firestore read failed (%s); loading from in-memory backup (failures=%d)",
                     exc,
+                    self._consecutive_failures,
                 )
-                self._fallback_store = InMemoryGameStateStore()
-                return None
+                return self._memory_backup.load_state()
             raise
 
     def clear_state(self) -> None:
@@ -467,13 +480,17 @@ class FirestoreGameStateStore(GameStatePersistence):
                 self._document_id
             )
             doc_ref.delete()
+            self._consecutive_failures = 0
+            self._memory_backup.clear_state()
         except Exception as exc:  # pylint: disable=broad-exception-caught
             if self._fallback_to_memory:
+                self._consecutive_failures += 1
                 logger.warning(
-                    "Firestore delete failed (%s); switching to in-memory fallback",
+                    "Firestore delete failed (%s); cleared in-memory backup (failures=%d)",
                     exc,
+                    self._consecutive_failures,
                 )
-                self._fallback_store = InMemoryGameStateStore()
+                self._memory_backup.clear_state()
             else:
                 raise
 
