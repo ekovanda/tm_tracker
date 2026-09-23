@@ -492,6 +492,38 @@
           if (campSelect && pending.campaign_id && document.activeElement !== campSelect) {
             campSelect.value = pending.campaign_id;
           }
+
+          const gameDurationInput = document.getElementById('game-duration-input');
+          if (
+            gameDurationInput &&
+            pending.settings.game_duration_seconds != null &&
+            document.activeElement !== gameDurationInput
+          ) {
+            const hours = pending.settings.game_duration_seconds / 3600;
+            gameDurationInput.value = Number.isInteger(hours) ? hours : hours.toFixed(1);
+          }
+
+          const graceInput = document.getElementById('grace-period-input');
+          if (
+            graceInput &&
+            pending.settings.grace_period_seconds != null &&
+            document.activeElement !== graceInput
+          ) {
+            graceInput.value = Math.round(pending.settings.grace_period_seconds / 60);
+          }
+
+          const timerInput = document.getElementById('timer-duration-input');
+          if (
+            timerInput &&
+            pending.settings.manual_timer_duration_seconds != null &&
+            document.activeElement !== timerInput
+          ) {
+            timerInput.value = Math.round(pending.settings.manual_timer_duration_seconds / 60);
+          }
+        }
+
+        if (pending && pending.board) {
+          this.renderBoard(pending.board);
         }
       } else {
         if (preSessionPanel) preSessionPanel.setAttribute('hidden', 'true');
@@ -659,6 +691,56 @@
       }
     }
 
+    async handleConfigChange() {
+      if (!this.isAuthenticated || !this.gameState || this.gameState.status !== 'pending') return;
+
+      const campSelect = document.getElementById('campaign-select');
+      const seedInput = document.getElementById('board-seed-input');
+      const gameDurationInput = document.getElementById('game-duration-input');
+      const graceInput = document.getElementById('grace-period-input');
+      const timerInput = document.getElementById('timer-duration-input');
+
+      const payload = {};
+      if (campSelect && campSelect.value) {
+        payload.campaign_id = campSelect.value;
+      }
+      if (seedInput && seedInput.value) {
+        const parsed = parseInt(seedInput.value, 10);
+        if (!isNaN(parsed)) payload.board_seed = parsed;
+      }
+      if (gameDurationInput && gameDurationInput.value) {
+        const parsed = parseFloat(gameDurationInput.value);
+        if (!isNaN(parsed) && parsed > 0) payload.game_duration_seconds = Math.round(parsed * 3600);
+      }
+      if (graceInput && graceInput.value) {
+        const parsed = parseInt(graceInput.value, 10);
+        if (!isNaN(parsed) && parsed >= 0) payload.grace_period_seconds = Math.round(parsed * 60);
+      }
+      if (timerInput && timerInput.value) {
+        const parsed = parseInt(timerInput.value, 10);
+        if (!isNaN(parsed) && parsed > 0) payload.manual_timer_duration_seconds = Math.round(parsed * 60);
+      }
+
+      if (Object.keys(payload).length === 0) return;
+
+      try {
+        const updated = await apiRequest('/api/game/configure', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+        if (updated) {
+          this.gameState = updated;
+          this.renderGameState();
+        }
+      } catch (err) {
+        if (err.status === 401) {
+          this.lockApp();
+        } else {
+          this.showNotification(`Configuration sync failed: ${err.message}`, 'warning');
+        }
+      }
+    }
+
     bindEvents() {
       // 1. Password submit
       const passwordForm = document.getElementById('password-form');
@@ -694,6 +776,21 @@
         lockBtn.addEventListener('click', () => this.lockApp());
       }
 
+      // Setup inputs live configuration sync
+      const configInputs = [
+        'campaign-select',
+        'board-seed-input',
+        'game-duration-input',
+        'grace-period-input',
+        'timer-duration-input',
+      ];
+      for (const id of configInputs) {
+        const el = document.getElementById(id);
+        if (el) {
+          el.addEventListener('change', () => this.handleConfigChange());
+        }
+      }
+
       // 3. Shuffle Board
       const shuffleBtn = document.getElementById('btn-shuffle');
       if (shuffleBtn) {
@@ -703,11 +800,16 @@
           if (seedInput) seedInput.value = newSeed;
 
           try {
-            await apiRequest('/api/game/configure', {
+            const updated = await apiRequest('/api/game/configure', {
               method: 'POST',
               body: JSON.stringify({ board_seed: newSeed }),
             });
-            this.syncState();
+            if (updated) {
+              this.gameState = updated;
+              this.renderGameState();
+            } else {
+              this.syncState();
+            }
           } catch (err) {
             this.showNotification(`Shuffle failed: ${err.message}`, 'danger');
           }

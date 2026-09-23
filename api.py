@@ -27,6 +27,7 @@ from authentication import (
     verify_session_token,
 )
 from bingo import (
+    PLAYABLE_TRACK_NUMBERS,
     BingoSettings,
     ManualTimerState,
     TrackRanking,
@@ -395,7 +396,7 @@ def _serialize_player(player: Player | None) -> dict[str, Any] | None:
 
 
 def _serialize_track(track: Track) -> dict[str, Any]:
-    series = (track.number - 1) // 5 + 1 if track.number is not None else 0
+    series = (track.number - 1) // 5 if track.number is not None else 0
     return {
         "uid": track.uid,
         "name": track.name,
@@ -475,11 +476,60 @@ def _compute_player_medals(
     return medal_counts, rank_points
 
 
+_CAMPAIGN_TRACKS_CACHE: dict[str, list[Track]] = {}
+
+
+def get_preview_tracks(campaign_id: str | None = None) -> list[Track]:
+    """Return campaign tracks for board preview using cache or default playable tracks."""
+    if campaign_id and campaign_id in _CAMPAIGN_TRACKS_CACHE:
+        return _CAMPAIGN_TRACKS_CACHE[campaign_id]
+
+    if campaign_id:
+        try:
+            token = get_current_service_token()
+            tracks = live_services.get_playable_campaign_tracks(campaign_id, token)
+            _CAMPAIGN_TRACKS_CACHE[campaign_id] = tracks
+            return tracks
+        except (UbisoftAuthenticationError, live_services.LiveServiceError) as error:
+            logger.debug(
+                "Live services unavailable for preview tracks",
+                extra={"error": str(error), "campaign_id": campaign_id},
+            )
+
+    return [
+        Track(name=f"Track {number:02d}", uid=f"track-{number:02d}", number=number)
+        for number in PLAYABLE_TRACK_NUMBERS
+    ]
+
+
+def _compute_preview_board(
+    campaign_id: str | None, board_seed: int
+) -> list[list[dict[str, Any]]]:
+    tracks = get_preview_tracks(campaign_id)
+    grid = build_bingo_grid(tracks, board_seed)
+    return [
+        [
+            {
+                "track": _serialize_track(track),
+                "rankings": [],
+                "owner": None,
+                "winning_time": None,
+                "margin": None,
+            }
+            for track in row
+        ]
+        for row in grid
+    ]
+
+
 def _serialize_canonical_game(
     snapshot: CanonicalGameState, now: datetime
 ) -> dict[str, Any]:
     pending = snapshot.pending
     session = snapshot.session
+    preview_board = _compute_preview_board(
+        pending.campaign_id, pending.settings.board_seed
+    )
     pending_payload = {
         "campaign_id": pending.campaign_id,
         "settings": {
@@ -488,6 +538,7 @@ def _serialize_canonical_game(
             "manual_timer_duration_seconds": pending.settings.manual_timer_duration.total_seconds(),
             "board_seed": pending.settings.board_seed,
         },
+        "board": preview_board,
     }
 
     if session is None:
@@ -705,6 +756,8 @@ def start_game(payload: StartGameRequest) -> dict[str, Any]:
             datetime.now(UTC),
             settings=settings,
         )
+        if updated.session and updated.session.tracks:
+            _CAMPAIGN_TRACKS_CACHE[campaign_id] = list(updated.session.tracks)
     except CanonicalGameAlreadyStartedError as error:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

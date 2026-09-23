@@ -182,6 +182,27 @@ def test_get_game_state_pending():
     assert data["session"] is None
     assert "pending" in data
     assert "settings" in data["pending"]
+    assert "board" in data["pending"]
+    assert len(data["pending"]["board"]) == 4
+    assert len(data["pending"]["board"][0]) == 4
+    for row in data["pending"]["board"]:
+        for cell in row:
+            assert cell["track"]["series"] in (0, 1, 2, 3)
+            assert cell["owner"] is None
+            assert cell["winning_time"] is None
+
+
+def test_pending_board_shuffles_with_seed():
+    client.post("/api/game/reset")
+    resp1 = client.post("/api/game/configure", json={"board_seed": 100})
+    board1 = resp1.json()["pending"]["board"]
+    tracks_seed_100 = [cell["track"]["track_number"] for row in board1 for cell in row]
+
+    resp2 = client.post("/api/game/configure", json={"board_seed": 200})
+    board2 = resp2.json()["pending"]["board"]
+    tracks_seed_200 = [cell["track"]["track_number"] for row in board2 for cell in row]
+
+    assert tracks_seed_100 != tracks_seed_200
 
 
 def test_configure_game():
@@ -259,7 +280,7 @@ def test_game_full_lifecycle():
             cell_0 = game_data["session"]["board"][0][0]
             assert "track_number" in cell_0["track"]
             assert "series" in cell_0["track"]
-            assert cell_0["track"]["series"] in (1, 2, 3, 4)
+            assert cell_0["track"]["series"] in (0, 1, 2, 3)
             assert "winning_time" in cell_0
             assert "medal_counts" in game_data["session"]
             assert "rank_points" in game_data["session"]
