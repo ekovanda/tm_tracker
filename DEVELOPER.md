@@ -32,9 +32,40 @@ Tests mirror these boundaries in `tests/`. Streamlit rendering tests use a fake 
 
 ## Deployment and Lifecycle
 
-Deploy `streamlit_app.py` to Streamlit Cloud and provide `BASIC_AUTH` and `APP_PASSWORD_HASH` in the app's Secrets settings using TOML syntax. Optional identity settings may be supplied there as well. No external game-state store or storage credentials are required.
+### Google Cloud Run (Decoupled FastAPI Architecture)
 
-The process-wide `SHARED_CANONICAL_GAME` store is the boundary for one game shared by every viewer connected to that running app process. Pending settings may be changed before start, the first successful start wins, and later starts cannot replace the session. Stop retains the final immutable snapshot for all viewers; reset removes the session and returns all viewers to the shared pending setup. A process restart creates a fresh in-memory store, so the next game begins with fresh configuration and current API data rather than restored state.
+The primary production runtime is Google Cloud Run, packaged via the production-ready `Dockerfile` (`python:3.13-slim`, non-root execution as `appuser`, automated container health check against `/health`, and uvicorn bound to `${PORT:-8080}`).
+
+Deploy to Cloud Run with:
+
+```bash
+gcloud run deploy tm-tracker \
+  --source . \
+  --platform managed \
+  --region europe-west1 \
+  --allow-unauthenticated \
+  --port 8080 \
+  --max-instances 1 \
+  --timeout 3600 \
+  --set-secrets BASIC_AUTH=tm-basic-auth:latest,APP_PASSWORD_HASH=tm-password-hash:latest
+```
+
+#### Operational Flags and Invariants
+
+- `--max-instances 1`: **Mandatory**. Enforces a single container instance to guarantee process-wide canonical game state coordination, single-flight leaderboard refreshes, and strict rate-limiting compliance against Nadeo Live Services.
+- `--timeout 3600`: Sets HTTP request and connection timeout to 1 hour, supporting persistent live viewer connections and extended challenge observation.
+- `--set-secrets`: Pulls credentials (`BASIC_AUTH` and `APP_PASSWORD_HASH`) from Google Cloud Secret Manager at container startup without hardcoding or leaking values into build logs, images, or environment variables.
+
+#### Persistence and Session Rehydration
+
+Active game state does not depend on container lifetime. `CanonicalGameStore` integrates with `storage.py` (`FirestoreGameStateStore` or `InMemoryGameStateStore` fallback).
+- Every state transition, line win, personal best observation, and timer action checkpoints the canonical state and player timers to Firestore document `sessions/active_session`.
+- On container startup or revision rollout, `CanonicalGameStore.rehydrate()` queries Firestore and restores the in-flight session and player timer clocks.
+- When an active session is reset via `/api/game/reset`, the active session document is cleaned from Firestore, returning the system to a clean pending state.
+
+### Streamlit Cloud (Legacy Mode)
+
+Deploy `streamlit_app.py` to Streamlit Cloud and provide `BASIC_AUTH` and `APP_PASSWORD_HASH` in the app's Secrets settings using TOML syntax. Optional identity settings may be supplied there as well. The Bingo game shares an in-memory singleton for viewers on that instance; a restart clears state without external persistence.
 
 ## State Ownership
 
@@ -87,15 +118,16 @@ The pure functions in `bingo.py` return new frozen state values rather than muta
 
 Use the project environment through `uv`:
 
-```powershell
+```bash
 uv run --active python -m pytest
-uv run --active python -m pytest tests/test_streamlit_bingo_page.py
-uv run --active python -m pytest tests/test_authentication.py tests/test_streamlit_app.py
+uv run --active python -m pytest tests/test_api.py --cov=api --cov-report=term-missing --cov-fail-under=85
+uv run --active python -m pytest tests/test_storage.py --cov=storage --cov-report=term-missing --cov-fail-under=85
+node tests/test_timer_countdown.js
 uv run --active python -m compileall .
 uv run --active pre-commit run --all-files
 ```
 
-Behavior-changing Python modules should have focused tests and at least 85% line coverage when a coverage check is applicable. Prefer injected clocks, loaders, sleepers, and fake Streamlit surfaces over live services or browser-dependent tests.
+Behavior-changing Python modules require focused tests and at least 85% line coverage (`api.py` and `storage.py` maintain >90% coverage). Client-side timer logic in `static/app.js` is verified via Node.js countdown tests. Prefer injected clocks, loaders, sleepers, and fake Streamlit surfaces over live services or browser-dependent tests.
 
 ## Workflow Documents
 
