@@ -354,3 +354,33 @@ def test_api_lifespan_handler():
     with TestClient(app) as test_client:
         resp = test_client.get("/health")
         assert resp.status_code == 200
+
+
+def test_static_index_html():
+    response = client.get("/static/index.html")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    text = response.text
+    assert "Trackmania Bingo Tracker" in text
+    assert 'id="password-gate"' in text
+    assert 'id="pre-session-panel"' in text
+    assert 'id="bingo-board"' in text
+    assert 'id="player-timers"' in text
+    assert 'id="record-feed"' in text
+
+
+def test_static_styles_css():
+    response = client.get("/static/styles.css")
+    assert response.status_code == 200
+    assert "text/css" in response.headers["content-type"]
+    text = response.text
+    assert "--bg-body" in text
+    assert ".bingo-grid" in text
+    assert ".player-card" in text
+
+
+def test_static_directory_serves_html():
+    response = client.get("/static/")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert "Trackmania Bingo Tracker" in response.text

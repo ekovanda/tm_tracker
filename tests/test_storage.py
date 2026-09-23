@@ -1,5 +1,6 @@
 """Tests for storage and persistence module."""
 
+from dataclasses import replace as dc_replace
 from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
@@ -82,7 +83,7 @@ def test_serialize_deserialize_pending_only():
         minutes=8
     )
     assert persisted.canonical_game.pending.settings.board_seed == 42
-    assert persisted.timers == {}
+    assert not persisted.timers
 
 
 def test_serialize_deserialize_active_session_and_timers():
@@ -421,10 +422,6 @@ def test_canonical_game_store_checkpoint_and_rehydration():
 
     # 4. Update session (personal best or line completion) checkpoints transition
     def add_winner(s: BingoSession) -> BingoSession:
-        from dataclasses import (
-            replace as dc_replace,  # pylint: disable=import-outside-toplevel
-        )
-
         return dc_replace(s, state=dc_replace(s.state, winner=PLAYERS[0]))
 
     game_store.update_session(add_winner)

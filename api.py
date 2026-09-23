@@ -5,11 +5,13 @@ from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from importlib.metadata import PackageNotFoundError, version
+from pathlib import Path
 from threading import Lock
 from typing import Any, cast
 
 from fastapi import FastAPI, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import live_services
@@ -97,6 +99,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+if STATIC_DIR.is_dir():
+    app.mount(
+        "/static", StaticFiles(directory=str(STATIC_DIR), html=True), name="static"
+    )
 
 _token_lock = Lock()
 _service_token: dict[str, Any] | None = None  # pylint: disable=invalid-name

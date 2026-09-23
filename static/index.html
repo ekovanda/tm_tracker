@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Trackmania Bingo Challenge Live Tracker">
+  <meta name="theme-color" content="#0b0f19">
+  <title>Trackmania Bingo Tracker</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Password Unlock Gate Modal -->
+  <div id="password-gate" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="brand-badge">🏁 TM BINGO</div>
+        <h2 class="modal-title">Trackmania Bingo Tracker</h2>
+        <p class="modal-subtitle">Enter the application password to unlock the challenge console.</p>
+      </div>
+      <form id="password-form" class="modal-form" autocomplete="off">
+        <div class="form-group">
+          <label for="password-input" class="form-label">Application Password</label>
+          <input
+            type="password"
+            id="password-input"
+            class="form-input"
+            placeholder="••••••••••••"
+            required
+            autocomplete="current-password"
+          >
+        </div>
+        <div id="password-error" class="alert alert-danger" hidden role="alert"></div>
+        <button type="submit" id="btn-unlock" class="btn btn-primary btn-block">
+          Unlock Console
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Main Application Wrapper -->
+  <div id="app" class="app-layout">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="header-brand">
+        <div class="brand-icon">🏁</div>
+        <div>
+          <h1 class="brand-title">Trackmania Bingo Tracker</h1>
+          <div class="brand-meta">
+            <span id="app-version" class="badge badge-subtle">v0.1.0</span>
+            <span class="meta-separator">•</span>
+            <span id="connection-status" class="status-indicator">
+              <span class="status-dot status-dot-online"></span>
+              <span id="status-text">Connected</span>
+            </span>
+          </div>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button id="btn-refresh" class="btn btn-ghost" title="Refresh Leaderboards">
+          <span class="btn-icon">🔄</span>
+          <span>Refresh</span>
+        </button>
+        <button id="btn-lock" class="btn btn-ghost" title="Lock Console">
+          <span class="btn-icon">🔒</span>
+          <span>Lock</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Global Alerts & Notifications -->
+    <div id="notification-banner" class="notification-container" aria-live="polite"></div>
+
+    <!-- Pre-Session Configuration Panel (Visible before game starts) -->
+    <section id="pre-session-panel" class="panel panel-setup">
+      <div class="panel-header">
+        <div>
+          <h2 class="panel-title">Pre-Session Configuration</h2>
+          <p class="panel-subtitle">Configure campaign, shuffle board seed, and timing limits before starting the challenge.</p>
+        </div>
+        <div class="panel-badge">
+          <span class="badge badge-warning">Setup Mode</span>
+        </div>
+      </div>
+
+      <div class="setup-grid">
+        <!-- Campaign Selector -->
+        <div class="form-group setup-col-wide">
+          <label for="campaign-select" class="form-label">Official Campaign</label>
+          <select id="campaign-select" class="form-select">
+            <option value="" disabled selected>Loading official campaigns...</option>
+          </select>
+        </div>
+
+        <!-- Board Seed & Shuffle -->
+        <div class="form-group setup-col-narrow">
+          <label for="board-seed-input" class="form-label">Board Seed</label>
+          <div class="input-with-button">
+            <input type="number" id="board-seed-input" class="form-input" value="12345" min="1">
+            <button type="button" id="btn-shuffle" class="btn btn-secondary" title="Shuffle Board Seed">
+              🔀 Shuffle
+            </button>
+          </div>
+        </div>
+
+        <!-- Game Duration -->
+        <div class="form-group">
+          <label for="game-duration-input" class="form-label">Game Duration (Hours)</label>
+          <input type="number" id="game-duration-input" class="form-input" value="5" min="1" max="24" step="0.5">
+        </div>
+
+        <!-- Grace Period -->
+        <div class="form-group">
+          <label for="grace-period-input" class="form-label">Grace Period (Minutes)</label>
+          <input type="number" id="grace-period-input" class="form-input" value="30" min="0" max="120">
+        </div>
+
+        <!-- Player Timer Duration -->
+        <div class="form-group">
+          <label for="timer-duration-input" class="form-label">Player Timer (Minutes)</label>
+          <input type="number" id="timer-duration-input" class="form-input" value="10" min="1" max="60">
+        </div>
+      </div>
+
+      <div class="setup-actions">
+        <button type="button" id="btn-start-game" class="btn btn-success btn-large">
+          <span class="btn-icon">🚀</span>
+          <span>Start Bingo Game</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- Active Session Status Bar (Visible when game is running or stopped) -->
+    <section id="active-session-bar" class="panel panel-status" hidden>
+      <div class="status-summary">
+        <div class="status-metric">
+          <span class="metric-label">Game Status</span>
+          <span id="game-status-badge" class="badge badge-success">Active</span>
+        </div>
+        <div class="status-metric">
+          <span class="metric-label">Campaign</span>
+          <span id="active-campaign-name" class="metric-value">—</span>
+        </div>
+        <div class="status-metric">
+          <span class="metric-label">Session Remaining</span>
+          <span id="game-remaining-clock" class="metric-value font-mono">05:00:00</span>
+        </div>
+        <div id="grace-metric" class="status-metric">
+          <span class="metric-label">Grace Period</span>
+          <span id="grace-status-badge" class="badge badge-warning">Active (30:00)</span>
+        </div>
+      </div>
+
+      <div class="status-actions">
+        <button type="button" id="btn-stop-game" class="btn btn-warning">
+          <span class="btn-icon">⏹️</span>
+          <span>Stop</span>
+        </button>
+        <button type="button" id="btn-reset-game" class="btn btn-danger">
+          <span class="btn-icon">🔄</span>
+          <span>Reset</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- Main Challenge Content: Grid, Timers, Records -->
+    <main class="challenge-layout">
+      <!-- Left Column: Bingo Board -->
+      <section class="board-column">
+        <div class="column-header">
+          <div>
+            <h2 class="section-title">4x4 Bingo Board</h2>
+            <p class="section-subtitle">Hold a completed line for 10 minutes to claim victory.</p>
+          </div>
+          <!-- Series Legend -->
+          <div class="series-legend">
+            <span class="legend-chip series-0">1-4 White</span>
+            <span class="legend-chip series-1">6-9 Green</span>
+            <span class="legend-chip series-2">11-14 Blue</span>
+            <span class="legend-chip series-3">16-19 Red</span>
+          </div>
+        </div>
+
+        <!-- 4x4 Bingo Grid -->
+        <div id="bingo-board" class="bingo-grid" role="grid" aria-label="Trackmania Bingo Board">
+          <!-- 16 track cards rendered dynamically or initial placeholder cells -->
+          <div class="track-cell series-0" data-cell-index="0" data-track-number="1">
+            <div class="cell-header">
+              <span class="series-badge">01</span>
+              <span class="track-name">Track 01</span>
+            </div>
+            <div class="cell-body">
+              <div class="owner-pill owner-neutral">Unclaimed</div>
+              <div class="cell-time font-mono">--:--.---</div>
+              <div class="cell-margin font-mono">+0.000s</div>
+            </div>
+            <div class="cell-rankings">
+              <div class="ranking-row rank-1"><span class="rank-badge">1</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+              <div class="ranking-row rank-2"><span class="rank-badge">2</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+              <div class="ranking-row rank-3"><span class="rank-badge">3</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+            </div>
+          </div>
+          <div class="track-cell series-1" data-cell-index="1" data-track-number="6">
+            <div class="cell-header">
+              <span class="series-badge">06</span>
+              <span class="track-name">Track 06</span>
+            </div>
+            <div class="cell-body">
+              <div class="owner-pill owner-neutral">Unclaimed</div>
+              <div class="cell-time font-mono">--:--.---</div>
+              <div class="cell-margin font-mono">+0.000s</div>
+            </div>
+            <div class="cell-rankings">
+              <div class="ranking-row rank-1"><span class="rank-badge">1</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+              <div class="ranking-row rank-2"><span class="rank-badge">2</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+              <div class="ranking-row rank-3"><span class="rank-badge">3</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+            </div>
+          </div>
+          <div class="track-cell series-2" data-cell-index="2" data-track-number="11">
+            <div class="cell-header">
+              <span class="series-badge">11</span>
+              <span class="track-name">Track 11</span>
+            </div>
+            <div class="cell-body">
+              <div class="owner-pill owner-neutral">Unclaimed</div>
+              <div class="cell-time font-mono">--:--.---</div>
+              <div class="cell-margin font-mono">+0.000s</div>
+            </div>
+            <div class="cell-rankings">
+              <div class="ranking-row rank-1"><span class="rank-badge">1</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+              <div class="ranking-row rank-2"><span class="rank-badge">2</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+              <div class="ranking-row rank-3"><span class="rank-badge">3</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+            </div>
+          </div>
+          <div class="track-cell series-3" data-cell-index="3" data-track-number="16">
+            <div class="cell-header">
+              <span class="series-badge">16</span>
+              <span class="track-name">Track 16</span>
+            </div>
+            <div class="cell-body">
+              <div class="owner-pill owner-neutral">Unclaimed</div>
+              <div class="cell-time font-mono">--:--.---</div>
+              <div class="cell-margin font-mono">+0.000s</div>
+            </div>
+            <div class="cell-rankings">
+              <div class="ranking-row rank-1"><span class="rank-badge">1</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+              <div class="ranking-row rank-2"><span class="rank-badge">2</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+              <div class="ranking-row rank-3"><span class="rank-badge">3</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+            </div>
+          </div>
+
+          <div class="track-cell series-3" data-cell-index="4" data-track-number="17">
+            <div class="cell-header">
+              <span class="series-badge">17</span>
+              <span class="track-name">Track 17</span>
+            </div>
+            <div class="cell-body">
+              <div class="owner-pill owner-neutral">Unclaimed</div>
+              <div class="cell-time font-mono">--:--.---</div>
+              <div class="cell-margin font-mono">+0.000s</div>
+            </div>
+            <div class="cell-rankings">
+              <div class="ranking-row rank-1"><span class="rank-badge">1</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+              <div class="ranking-row rank-2"><span class="rank-badge">2</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+              <div class="ranking-row rank-3"><span class="rank-badge">3</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+            </div>
+          </div>
+          <div class="track-cell series-2" data-cell-index="5" data-track-number="12">
+            <div class="cell-header">
+              <span class="series-badge">12</span>
+              <span class="track-name">Track 12</span>
+            </div>
+            <div class="cell-body">
+              <div class="owner-pill owner-neutral">Unclaimed</div>
+              <div class="cell-time font-mono">--:--.---</div>
+              <div class="cell-margin font-mono">+0.000s</div>
+            </div>
+            <div class="cell-rankings">
+              <div class="ranking-row rank-1"><span class="rank-badge">1</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+              <div class="ranking-row rank-2"><span class="rank-badge">2</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+              <div class="ranking-row rank-3"><span class="rank-badge">3</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+            </div>
+          </div>
+          <div class="track-cell series-1" data-cell-index="6" data-track-number="7">
+            <div class="cell-header">
+              <span class="series-badge">07</span>
+              <span class="track-name">Track 07</span>
+            </div>
+            <div class="cell-body">
+              <div class="owner-pill owner-neutral">Unclaimed</div>
+              <div class="cell-time font-mono">--:--.---</div>
+              <div class="cell-margin font-mono">+0.000s</div>
+            </div>
+            <div class="cell-rankings">
+              <div class="ranking-row rank-1"><span class="rank-badge">1</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+              <div class="ranking-row rank-2"><span class="rank-badge">2</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+              <div class="ranking-row rank-3"><span class="rank-badge">3</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+            </div>
+          </div>
+          <div class="track-cell series-0" data-cell-index="7" data-track-number="2">
+            <div class="cell-header">
+              <span class="series-badge">02</span>
+              <span class="track-name">Track 02</span>
+            </div>
+            <div class="cell-body">
+              <div class="owner-pill owner-neutral">Unclaimed</div>
+              <div class="cell-time font-mono">--:--.---</div>
+              <div class="cell-margin font-mono">+0.000s</div>
+            </div>
+            <div class="cell-rankings">
+              <div class="ranking-row rank-1"><span class="rank-badge">1</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+              <div class="ranking-row rank-2"><span class="rank-badge">2</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+              <div class="ranking-row rank-3"><span class="rank-badge">3</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+            </div>
+          </div>
+
+          <div class="track-cell series-1" data-cell-index="8" data-track-number="8">
+            <div class="cell-header">
+              <span class="series-badge">08</span>
+              <span class="track-name">Track 08</span>
+            </div>
+            <div class="cell-body">
+              <div class="owner-pill owner-neutral">Unclaimed</div>
+              <div class="cell-time font-mono">--:--.---</div>
+              <div class="cell-margin font-mono">+0.000s</div>
+            </div>
+            <div class="cell-rankings">
+              <div class="ranking-row rank-1"><span class="rank-badge">1</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+              <div class="ranking-row rank-2"><span class="rank-badge">2</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+              <div class="ranking-row rank-3"><span class="rank-badge">3</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+            </div>
+          </div>
+          <div class="track-cell series-0" data-cell-index="9" data-track-number="3">
+            <div class="cell-header">
+              <span class="series-badge">03</span>
+              <span class="track-name">Track 03</span>
+            </div>
+            <div class="cell-body">
+              <div class="owner-pill owner-neutral">Unclaimed</div>
+              <div class="cell-time font-mono">--:--.---</div>
+              <div class="cell-margin font-mono">+0.000s</div>
+            </div>
+            <div class="cell-rankings">
+              <div class="ranking-row rank-1"><span class="rank-badge">1</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+              <div class="ranking-row rank-2"><span class="rank-badge">2</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+              <div class="ranking-row rank-3"><span class="rank-badge">3</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+            </div>
+          </div>
+          <div class="track-cell series-3" data-cell-index="10" data-track-number="18">
+            <div class="cell-header">
+              <span class="series-badge">18</span>
+              <span class="track-name">Track 18</span>
+            </div>
+            <div class="cell-body">
+              <div class="owner-pill owner-neutral">Unclaimed</div>
+              <div class="cell-time font-mono">--:--.---</div>
+              <div class="cell-margin font-mono">+0.000s</div>
+            </div>
+            <div class="cell-rankings">
+              <div class="ranking-row rank-1"><span class="rank-badge">1</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+              <div class="ranking-row rank-2"><span class="rank-badge">2</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+              <div class="ranking-row rank-3"><span class="rank-badge">3</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+            </div>
+          </div>
+          <div class="track-cell series-2" data-cell-index="11" data-track-number="13">
+            <div class="cell-header">
+              <span class="series-badge">13</span>
+              <span class="track-name">Track 13</span>
+            </div>
+            <div class="cell-body">
+              <div class="owner-pill owner-neutral">Unclaimed</div>
+              <div class="cell-time font-mono">--:--.---</div>
+              <div class="cell-margin font-mono">+0.000s</div>
+            </div>
+            <div class="cell-rankings">
+              <div class="ranking-row rank-1"><span class="rank-badge">1</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+              <div class="ranking-row rank-2"><span class="rank-badge">2</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+              <div class="ranking-row rank-3"><span class="rank-badge">3</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+            </div>
+          </div>
+
+          <div class="track-cell series-2" data-cell-index="12" data-track-number="14">
+            <div class="cell-header">
+              <span class="series-badge">14</span>
+              <span class="track-name">Track 14</span>
+            </div>
+            <div class="cell-body">
+              <div class="owner-pill owner-neutral">Unclaimed</div>
+              <div class="cell-time font-mono">--:--.---</div>
+              <div class="cell-margin font-mono">+0.000s</div>
+            </div>
+            <div class="cell-rankings">
+              <div class="ranking-row rank-1"><span class="rank-badge">1</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+              <div class="ranking-row rank-2"><span class="rank-badge">2</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+              <div class="ranking-row rank-3"><span class="rank-badge">3</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+            </div>
+          </div>
+          <div class="track-cell series-3" data-cell-index="13" data-track-number="19">
+            <div class="cell-header">
+              <span class="series-badge">19</span>
+              <span class="track-name">Track 19</span>
+            </div>
+            <div class="cell-body">
+              <div class="owner-pill owner-neutral">Unclaimed</div>
+              <div class="cell-time font-mono">--:--.---</div>
+              <div class="cell-margin font-mono">+0.000s</div>
+            </div>
+            <div class="cell-rankings">
+              <div class="ranking-row rank-1"><span class="rank-badge">1</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+              <div class="ranking-row rank-2"><span class="rank-badge">2</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+              <div class="ranking-row rank-3"><span class="rank-badge">3</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+            </div>
+          </div>
+          <div class="track-cell series-0" data-cell-index="14" data-track-number="4">
+            <div class="cell-header">
+              <span class="series-badge">04</span>
+              <span class="track-name">Track 04</span>
+            </div>
+            <div class="cell-body">
+              <div class="owner-pill owner-neutral">Unclaimed</div>
+              <div class="cell-time font-mono">--:--.---</div>
+              <div class="cell-margin font-mono">+0.000s</div>
+            </div>
+            <div class="cell-rankings">
+              <div class="ranking-row rank-1"><span class="rank-badge">1</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+              <div class="ranking-row rank-2"><span class="rank-badge">2</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+              <div class="ranking-row rank-3"><span class="rank-badge">3</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+            </div>
+          </div>
+          <div class="track-cell series-1" data-cell-index="15" data-track-number="9">
+            <div class="cell-header">
+              <span class="series-badge">09</span>
+              <span class="track-name">Track 09</span>
+            </div>
+            <div class="cell-body">
+              <div class="owner-pill owner-neutral">Unclaimed</div>
+              <div class="cell-time font-mono">--:--.---</div>
+              <div class="cell-margin font-mono">+0.000s</div>
+            </div>
+            <div class="cell-rankings">
+              <div class="ranking-row rank-1"><span class="rank-badge">1</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+              <div class="ranking-row rank-2"><span class="rank-badge">2</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+              <div class="ranking-row rank-3"><span class="rank-badge">3</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Column: Player Timers and Live Records Feed -->
+      <aside class="sidebar-column">
+        <!-- Player Timers -->
+        <section class="panel panel-timers">
+          <div class="column-header">
+            <h2 class="section-title">Player Timers</h2>
+            <span class="badge badge-subtle">10m Limit</span>
+          </div>
+
+          <div id="player-timers" class="timers-stack">
+            <!-- Eljay Card -->
+            <div class="player-card player-eljay" data-player-id="7e468ff6-4558-43ce-ad23-591dd86291c0">
+              <div class="player-header">
+                <div class="player-identity">
+                  <span class="player-avatar">E</span>
+                  <div>
+                    <h3 class="player-name">Eljay</h3>
+                    <div class="player-medals">
+                      <span class="medal-tag medal-gold" title="Gold Medals">🥇 <span class="gold-count">0</span></span>
+                      <span class="medal-tag medal-silver" title="Silver Medals">🥈 <span class="silver-count">0</span></span>
+                      <span class="medal-tag medal-bronze" title="Bronze Medals">🥉 <span class="bronze-count">0</span></span>
+                      <span class="medal-points" title="Total Rank Points"><span class="points-count">0</span> pts</span>
+                    </div>
+                  </div>
+                </div>
+                <span class="timer-badge timer-ready">Ready</span>
+              </div>
+              <div class="timer-display font-mono">10:00</div>
+              <div class="progress-bar-container" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
+                <div class="progress-bar-fill" style="width: 100%;"></div>
+              </div>
+              <div class="timer-controls">
+                <button type="button" class="btn btn-sm btn-timer-start" data-action="start" data-account="7e468ff6-4558-43ce-ad23-591dd86291c0">Start</button>
+                <button type="button" class="btn btn-sm btn-timer-stop" data-action="stop" data-account="7e468ff6-4558-43ce-ad23-591dd86291c0">Stop</button>
+                <button type="button" class="btn btn-sm btn-timer-restart" data-action="restart" data-account="7e468ff6-4558-43ce-ad23-591dd86291c0">Restart</button>
+              </div>
+            </div>
+
+            <!-- Lry Card -->
+            <div class="player-card player-lry" data-player-id="f00ab19a-14e5-4e6e-9a45-78f1af8487e1">
+              <div class="player-header">
+                <div class="player-identity">
+                  <span class="player-avatar">L</span>
+                  <div>
+                    <h3 class="player-name">Lry</h3>
+                    <div class="player-medals">
+                      <span class="medal-tag medal-gold" title="Gold Medals">🥇 <span class="gold-count">0</span></span>
+                      <span class="medal-tag medal-silver" title="Silver Medals">🥈 <span class="silver-count">0</span></span>
+                      <span class="medal-tag medal-bronze" title="Bronze Medals">🥉 <span class="bronze-count">0</span></span>
+                      <span class="medal-points" title="Total Rank Points"><span class="points-count">0</span> pts</span>
+                    </div>
+                  </div>
+                </div>
+                <span class="timer-badge timer-ready">Ready</span>
+              </div>
+              <div class="timer-display font-mono">10:00</div>
+              <div class="progress-bar-container" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
+                <div class="progress-bar-fill" style="width: 100%;"></div>
+              </div>
+              <div class="timer-controls">
+                <button type="button" class="btn btn-sm btn-timer-start" data-action="start" data-account="f00ab19a-14e5-4e6e-9a45-78f1af8487e1">Start</button>
+                <button type="button" class="btn btn-sm btn-timer-stop" data-action="stop" data-account="f00ab19a-14e5-4e6e-9a45-78f1af8487e1">Stop</button>
+                <button type="button" class="btn btn-sm btn-timer-restart" data-action="restart" data-account="f00ab19a-14e5-4e6e-9a45-78f1af8487e1">Restart</button>
+              </div>
+            </div>
+
+            <!-- Timo Card -->
+            <div class="player-card player-timo" data-player-id="b9b79f89-19e7-4f26-be01-03556b8890b9">
+              <div class="player-header">
+                <div class="player-identity">
+                  <span class="player-avatar">T</span>
+                  <div>
+                    <h3 class="player-name">Timo</h3>
+                    <div class="player-medals">
+                      <span class="medal-tag medal-gold" title="Gold Medals">🥇 <span class="gold-count">0</span></span>
+                      <span class="medal-tag medal-silver" title="Silver Medals">🥈 <span class="silver-count">0</span></span>
+                      <span class="medal-tag medal-bronze" title="Bronze Medals">🥉 <span class="bronze-count">0</span></span>
+                      <span class="medal-points" title="Total Rank Points"><span class="points-count">0</span> pts</span>
+                    </div>
+                  </div>
+                </div>
+                <span class="timer-badge timer-ready">Ready</span>
+              </div>
+              <div class="timer-display font-mono">10:00</div>
+              <div class="progress-bar-container" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
+                <div class="progress-bar-fill" style="width: 100%;"></div>
+              </div>
+              <div class="timer-controls">
+                <button type="button" class="btn btn-sm btn-timer-start" data-action="start" data-account="b9b79f89-19e7-4f26-be01-03556b8890b9">Start</button>
+                <button type="button" class="btn btn-sm btn-timer-stop" data-action="stop" data-account="b9b79f89-19e7-4f26-be01-03556b8890b9">Stop</button>
+                <button type="button" class="btn btn-sm btn-timer-restart" data-action="restart" data-account="b9b79f89-19e7-4f26-be01-03556b8890b9">Restart</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Live PB Record History Feed -->
+        <section class="panel panel-records">
+          <div class="column-header">
+            <h2 class="section-title">Live PB Records</h2>
+            <span id="record-count" class="badge badge-subtle">0 Records</span>
+          </div>
+
+          <div id="record-feed" class="record-feed-container" aria-live="polite">
+            <div class="record-empty">
+              <span class="empty-icon">⏱️</span>
+              <p>No personal bests recorded yet.</p>
+              <p class="empty-hint">New records will appear here live during the challenge.</p>
+            </div>
+          </div>
+        </section>
+      </aside>
+    </main>
+  </div>
+
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
