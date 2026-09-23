@@ -13,6 +13,7 @@ from fastapi import FastAPI, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 import live_services
 from authentication import (
@@ -101,6 +102,22 @@ app.add_middleware(
 )
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+
+class SPAStaticFiles(StaticFiles):
+    """Static file handler providing SPA fallback to index.html for unmapped frontend routes."""
+
+    async def get_response(self, path: str, scope: Any) -> Response:
+        try:
+            return await super().get_response(path, scope)
+        except StarletteHTTPException as ex:
+            if ex.status_code == status.HTTP_404_NOT_FOUND and not path.startswith(
+                "api"
+            ):
+                return await super().get_response("index.html", scope)
+            raise
+
+
 if STATIC_DIR.is_dir():
     app.mount(
         "/static", StaticFiles(directory=str(STATIC_DIR), html=True), name="static"
@@ -588,3 +605,11 @@ def timer_action(account_id: str, payload: TimerActionRequest) -> dict[str, Any]
         )
 
     return _serialize_timer(player, timer, now)
+
+
+if STATIC_DIR.is_dir():
+    app.mount(
+        "/",
+        SPAStaticFiles(directory=str(STATIC_DIR), html=True),
+        name="frontend_root",
+    )

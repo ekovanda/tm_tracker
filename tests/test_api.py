@@ -398,3 +398,101 @@ def test_static_app_js():
     assert "calculateTimerState" in text
     assert "calculateSessionTime" in text
     assert "TimerEngine" in text
+
+
+def test_root_path_serves_index_html():
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert "Trackmania Bingo Tracker" in response.text
+
+
+def test_root_static_assets_serve_correctly():
+    css_resp = client.get("/styles.css")
+    assert css_resp.status_code == 200
+    assert "text/css" in css_resp.headers["content-type"]
+
+    js_resp = client.get("/app.js")
+    assert js_resp.status_code == 200
+    assert (
+        "javascript" in js_resp.headers["content-type"]
+        or "application/x-javascript" in js_resp.headers["content-type"]
+    )
+
+
+def test_spa_fallback_serves_index_html():
+    response = client.get("/custom-client-route")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert "Trackmania Bingo Tracker" in response.text
+
+
+def test_api_unknown_route_returns_404_json():
+    response = client.get("/api/unknown_endpoint_that_does_not_exist")
+    assert response.status_code == 404
+    assert response.headers["content-type"] == "application/json"
+    assert "detail" in response.json()
+
+
+def test_full_interactive_frontend_flow():
+    # 1. Verify password
+    with patch("api.verify_app_password", return_value=True):
+        auth_resp = client.post("/api/auth/verify", json={"password": "valid"})
+        assert auth_resp.status_code == 200
+        assert auth_resp.json()["authenticated"] is True
+
+    # 2. Configure board seed & settings
+    cfg_resp = client.post(
+        "/api/game/configure",
+        json={"campaign_id": "test_camp_e2e", "board_seed": 77777},
+    )
+    assert cfg_resp.status_code == 200
+    assert cfg_resp.json()["pending"]["settings"]["board_seed"] == 77777
+
+    # 3. Start game
+    set_cached_service_token({"accessToken": "fake_token"})
+    try:
+        sample_tracks = [
+            Track(str(num), f"Track {num}", number=num)
+            for num in [1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 16, 17, 18, 19]
+        ]
+        with patch("live_services.get_campaign_tracks", return_value=sample_tracks):
+            start_resp = client.post(
+                "/api/game/start",
+                json={
+                    "campaign_id": "test_camp_e2e",
+                    "board_seed": 77777,
+                    "grace_period_minutes": 0,
+                    "manual_timer_duration_seconds": 600,
+                },
+            )
+            assert start_resp.status_code == 200
+            assert start_resp.json()["status"] == "active"
+
+            # 4. Timer actions
+            p0 = PLAYERS[0]
+            t_start = client.post(
+                f"/api/timers/{p0.account_id}/action",
+                json={"action": "start"},
+            )
+            assert t_start.status_code == 200
+            assert t_start.json()["status"] == "active"
+
+            t_stop = client.post(
+                f"/api/timers/{p0.account_id}/action",
+                json={"action": "stop"},
+            )
+            assert t_stop.status_code == 200
+            assert t_stop.json()["status"] == "stopped"
+
+            # 5. Stop & reset game
+            stop_resp = client.post("/api/game/stop")
+            assert stop_resp.status_code == 200
+            assert stop_resp.json()["status"] == "stopped"
+
+            reset_resp = client.post("/api/game/reset")
+            assert reset_resp.status_code == 200
+            assert reset_resp.json()["status"] == "pending"
+    finally:
+        set_cached_service_token(None)
+        client.post("/api/game/reset")

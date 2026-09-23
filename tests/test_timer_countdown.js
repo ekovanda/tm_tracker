@@ -7,9 +7,11 @@ const path = require('path');
 
 const {
   formatTime,
+  formatTrackTime,
   calculateTimerState,
   calculateSessionTime,
   TimerEngine,
+  AppController,
 } = require(path.join(__dirname, '..', 'static', 'app.js'));
 
 console.log('Running client-side timer countdown tests...');
@@ -25,6 +27,14 @@ assert.strictEqual(formatTime(3599), '59:59');
 assert.strictEqual(formatTime(3600), '01:00:00');
 assert.strictEqual(formatTime(18000), '05:00:00');
 console.log('✓ formatTime tests passed');
+
+// 1b. Test formatTrackTime
+assert.strictEqual(formatTrackTime(null), '--:--.---');
+assert.strictEqual(formatTrackTime(undefined), '--:--.---');
+assert.strictEqual(formatTrackTime(0), '00:00.000');
+assert.strictEqual(formatTrackTime(42315), '00:42.315');
+assert.strictEqual(formatTrackTime(65432), '01:05.432');
+console.log('✓ formatTrackTime tests passed');
 
 // 2. Test calculateTimerState - Ready State
 const readyTimer = {

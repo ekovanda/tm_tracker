@@ -1,8 +1,11 @@
 /**
- * Trackmania Bingo Tracker - Client-Side Timer & Countdown Engine
+ * Trackmania Bingo Tracker - Frontend Application Logic & Timer Engine
  *
- * Decouples the 1-second UI countdown tick from server network traffic.
- * Calculates remaining durations locally using `Date.now()` vs server timestamps (`started_at`).
+ * Provides:
+ * 1. Client-side timer countdown engine with local timestamp calculation
+ * 2. API synchronization with FastAPI backend (/api/*)
+ * 3. Interactive controls: auth unlock gate, pre-session setup, board shuffle,
+ *    game lifecycle (start, stop, reset, poll), and player timer actions.
  */
 
 (function (root, factory) {
@@ -14,8 +17,10 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
 
+  // --- Formatting Helpers ---
+
   /**
-   * Format a duration in seconds to MM:SS or HH:MM:SS.
+   * Format seconds to MM:SS or HH:MM:SS.
    * @param {number} totalSeconds
    * @returns {string}
    */
@@ -24,7 +29,6 @@
     const hours = Math.floor(s / 3600);
     const minutes = Math.floor((s % 3600) / 60);
     const seconds = s % 60;
-
     const pad = (n) => String(n).padStart(2, '0');
 
     if (hours > 0) {
@@ -34,9 +38,26 @@
   }
 
   /**
+   * Format milliseconds to MM:SS.mmm track time.
+   * @param {number|null} ms
+   * @returns {string}
+   */
+  function formatTrackTime(ms) {
+    if (ms === null || ms === undefined || isNaN(ms)) return '--:--.---';
+    const totalMs = Math.max(0, Math.floor(ms));
+    const minutes = Math.floor(totalMs / 60000);
+    const seconds = Math.floor((totalMs % 60000) / 1000);
+    const millis = totalMs % 1000;
+    const pad = (n, len = 2) => String(n).padStart(len, '0');
+    return `${pad(minutes)}:${pad(seconds)}.${pad(millis, 3)}`;
+  }
+
+  // --- Timer Calculation Logic ---
+
+  /**
    * Compute the client-side calculated state for a player timer.
-   * @param {object} timer - { account_id, status, started_at, duration_seconds, remaining_seconds }
-   * @param {number} [nowMs] - Current timestamp in ms (defaults to Date.now())
+   * @param {object} timer
+   * @param {number} [nowMs]
    * @returns {object} { status, remainingSeconds, progressFraction, formatted }
    */
   function calculateTimerState(timer, nowMs) {
@@ -87,7 +108,6 @@
       };
     }
 
-    // Default: 'ready'
     return {
       status: 'ready',
       remainingSeconds: duration,
@@ -98,8 +118,8 @@
 
   /**
    * Compute client-side countdowns for the overall session and grace period.
-   * @param {object} session - Session state object with started_at, settings, or duration fields
-   * @param {number} [nowMs] - Current timestamp in ms
+   * @param {object} session
+   * @param {number} [nowMs]
    * @returns {object} { gameRemaining, formattedGame, graceActive, graceRemaining, formattedGrace }
    */
   function calculateSessionTime(session, nowMs) {
@@ -139,21 +159,16 @@
     };
   }
 
-  /**
-   * TimerEngine manages local timer state and drives the DOM tick updates.
-   */
+  // --- Timer Engine ---
+
   class TimerEngine {
     constructor() {
-      this.timers = new Map(); // account_id -> timerData
+      this.timers = new Map();
       this.session = null;
       this.intervalId = null;
       this.tickListeners = new Set();
     }
 
-    /**
-     * Set or update timer data from server API response.
-     * @param {Array<object>} timersList
-     */
     setTimers(timersList) {
       if (!Array.isArray(timersList)) return;
       for (const t of timersList) {
@@ -164,39 +179,23 @@
       this.render();
     }
 
-    /**
-     * Update a single player's timer data.
-     * @param {string} accountId
-     * @param {object} timerData
-     */
     setTimer(accountId, timerData) {
       if (!accountId || !timerData) return;
       this.timers.set(accountId, timerData);
       this.render();
     }
 
-    /**
-     * Set or update active session data from server API response.
-     * @param {object} session
-     */
     setSession(session) {
       this.session = session;
       this.render();
     }
 
-    /**
-     * Register a callback listener invoked on each tick.
-     * @param {Function} listener
-     */
     onTick(listener) {
       if (typeof listener === 'function') {
         this.tickListeners.add(listener);
       }
     }
 
-    /**
-     * Start the client-side tick loop (ticks every 250ms for responsiveness).
-     */
     start() {
       if (this.intervalId !== null) return;
       this.render();
@@ -205,9 +204,6 @@
       }, 250);
     }
 
-    /**
-     * Stop the tick loop.
-     */
     stop() {
       if (this.intervalId !== null) {
         clearInterval(this.intervalId);
@@ -215,25 +211,19 @@
       }
     }
 
-    /**
-     * Calculate all current states and update the DOM elements.
-     */
     render() {
       const nowMs = Date.now();
 
-      // Render player timers
       for (const [accountId, rawTimer] of this.timers.entries()) {
         const computed = calculateTimerState(rawTimer, nowMs);
         this.updatePlayerCard(accountId, computed);
       }
 
-      // Render session & grace period countdowns
       if (this.session && this.session.status === 'active') {
         const computedSession = calculateSessionTime(this.session, nowMs);
         this.updateSessionBar(computedSession);
       }
 
-      // Notify external tick listeners
       for (const listener of this.tickListeners) {
         try {
           listener(nowMs);
@@ -243,24 +233,17 @@
       }
     }
 
-    /**
-     * Update DOM for a single player timer card.
-     * @param {string} accountId
-     * @param {object} computed - Result from calculateTimerState
-     */
     updatePlayerCard(accountId, computed) {
       if (typeof document === 'undefined') return;
 
       const card = document.querySelector(`.player-card[data-player-id="${accountId}"]`);
       if (!card) return;
 
-      // Timer display text (MM:SS)
       const display = card.querySelector('.timer-display');
       if (display) {
         display.textContent = computed.formatted;
       }
 
-      // Progress bar fill
       const progressFill = card.querySelector('.progress-bar-fill');
       if (progressFill) {
         const pct = (computed.progressFraction * 100).toFixed(1);
@@ -273,7 +256,6 @@
         progressContainer.setAttribute('aria-valuenow', String(pct));
       }
 
-      // Status pill badge
       const badge = card.querySelector('.timer-badge');
       if (badge) {
         badge.className = `timer-badge timer-${computed.status}`;
@@ -281,10 +263,6 @@
       }
     }
 
-    /**
-     * Update DOM for the session status bar.
-     * @param {object} computed - Result from calculateSessionTime
-     */
     updateSessionBar(computed) {
       if (typeof document === 'undefined') return;
 
@@ -306,23 +284,551 @@
     }
   }
 
-  // Create shared default engine instance
-  const engine = new TimerEngine();
+  // --- API Client ---
 
-  // Auto-start in browser environment once DOM is ready
+  async function apiRequest(url, options = {}) {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...options.headers,
+        },
+        ...options,
+      });
+
+      if (!response.ok) {
+        let errMessage = `Request failed: ${response.statusText}`;
+        try {
+          const errData = await response.json();
+          if (errData && errData.detail) {
+            errMessage = errData.detail;
+          }
+        } catch (_) {}
+        const error = new Error(errMessage);
+        error.status = response.status;
+        throw error;
+      }
+
+      return await response.json();
+    } catch (err) {
+      console.warn(`API call error on ${url}:`, err.message);
+      throw err;
+    }
+  }
+
+  // --- Application State Controller ---
+
+  class AppController {
+    constructor(timerEngine) {
+      this.timerEngine = timerEngine;
+      this.isAuthenticated = false;
+      this.campaigns = [];
+      this.gameState = null;
+      this.pollInterval = null;
+    }
+
+    init() {
+      this.bindEvents();
+
+      // Check existing session auth
+      const savedAuth = sessionStorage.getItem('tm_tracker_auth');
+      if (savedAuth === 'true') {
+        this.unlockApp();
+      } else {
+        this.showAuthGate();
+      }
+    }
+
+    showAuthGate() {
+      this.isAuthenticated = false;
+      const gate = document.getElementById('password-gate');
+      if (gate) gate.removeAttribute('hidden');
+    }
+
+    unlockApp() {
+      this.isAuthenticated = true;
+      sessionStorage.setItem('tm_tracker_auth', 'true');
+      const gate = document.getElementById('password-gate');
+      if (gate) gate.setAttribute('hidden', 'true');
+
+      this.timerEngine.start();
+      this.loadCampaigns();
+      this.syncState();
+      this.startPolling();
+    }
+
+    lockApp() {
+      this.isAuthenticated = false;
+      sessionStorage.removeItem('tm_tracker_auth');
+      this.stopPolling();
+      this.showAuthGate();
+    }
+
+    startPolling() {
+      this.stopPolling();
+      this.pollInterval = setInterval(() => {
+        if (this.isAuthenticated) {
+          this.syncState();
+        }
+      }, 5000);
+    }
+
+    stopPolling() {
+      if (this.pollInterval) {
+        clearInterval(this.pollInterval);
+        this.pollInterval = null;
+      }
+    }
+
+    showNotification(message, type = 'info') {
+      const banner = document.getElementById('notification-banner');
+      if (!banner) return;
+      banner.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
+      setTimeout(() => {
+        banner.innerHTML = '';
+      }, 5000);
+    }
+
+    async loadCampaigns() {
+      try {
+        const campaigns = await apiRequest('/api/campaigns');
+        this.campaigns = campaigns || [];
+        this.renderCampaignSelect();
+      } catch (err) {
+        if (err.status === 401) {
+          this.lockApp();
+        } else {
+          this.showNotification(`Failed to load campaigns: ${err.message}`, 'danger');
+        }
+      }
+    }
+
+    renderCampaignSelect() {
+      const select = document.getElementById('campaign-select');
+      if (!select) return;
+
+      const currentValue = select.value;
+      select.innerHTML = '';
+
+      if (this.campaigns.length === 0) {
+        select.innerHTML = '<option value="" disabled selected>No campaigns available</option>';
+        return;
+      }
+
+      for (const camp of this.campaigns) {
+        const opt = document.createElement('option');
+        opt.value = camp.campaign_id;
+        opt.textContent = camp.name;
+        select.appendChild(opt);
+      }
+
+      if (currentValue && this.campaigns.some((c) => c.campaign_id === currentValue)) {
+        select.value = currentValue;
+      } else if (this.gameState && this.gameState.pending && this.gameState.pending.campaign_id) {
+        select.value = this.gameState.pending.campaign_id;
+      }
+    }
+
+    async syncState() {
+      try {
+        const [game, timers] = await Promise.all([
+          apiRequest('/api/game'),
+          apiRequest('/api/timers'),
+        ]);
+
+        this.gameState = game;
+        this.timerEngine.setTimers(timers);
+
+        if (game.session) {
+          this.timerEngine.setSession(game.session);
+        }
+
+        this.renderGameState();
+      } catch (err) {
+        if (err.status === 401) {
+          this.lockApp();
+        }
+      }
+    }
+
+    renderGameState() {
+      if (!this.gameState) return;
+
+      const preSessionPanel = document.getElementById('pre-session-panel');
+      const activeBar = document.getElementById('active-session-bar');
+      const isPending = this.gameState.status === 'pending';
+
+      if (isPending) {
+        if (preSessionPanel) preSessionPanel.removeAttribute('hidden');
+        if (activeBar) activeBar.setAttribute('hidden', 'true');
+
+        // Sync pending settings to inputs if not currently focused
+        const pending = this.gameState.pending;
+        if (pending && pending.settings) {
+          const seedInput = document.getElementById('board-seed-input');
+          if (seedInput && document.activeElement !== seedInput) {
+            seedInput.value = pending.settings.board_seed;
+          }
+
+          const campSelect = document.getElementById('campaign-select');
+          if (campSelect && pending.campaign_id && document.activeElement !== campSelect) {
+            campSelect.value = pending.campaign_id;
+          }
+        }
+      } else {
+        if (preSessionPanel) preSessionPanel.setAttribute('hidden', 'true');
+        if (activeBar) activeBar.removeAttribute('hidden');
+
+        const session = this.gameState.session;
+        if (session) {
+          const statusBadge = document.getElementById('game-status-badge');
+          if (statusBadge) {
+            statusBadge.textContent = session.status.toUpperCase();
+            statusBadge.className = `badge badge-${session.status === 'active' ? 'success' : 'warning'}`;
+          }
+
+          const campName = document.getElementById('active-campaign-name');
+          if (campName) {
+            const camp = this.campaigns.find((c) => c.campaign_id === session.campaign_id);
+            campName.textContent = camp ? camp.name : session.campaign_id;
+          }
+
+          this.renderBoard(session.board);
+          this.renderMedals(session.rank_points, session.medal_counts);
+          this.renderRecords(session.records);
+        }
+      }
+    }
+
+    renderBoard(board) {
+      if (!Array.isArray(board) || board.length === 0) return;
+
+      const cells = document.querySelectorAll('.bingo-grid .track-cell');
+      let flatIndex = 0;
+
+      for (let r = 0; r < board.length; r++) {
+        for (let c = 0; c < board[r].length; c++) {
+          const cellData = board[r][c];
+          const cellEl = cells[flatIndex];
+          flatIndex++;
+          if (!cellEl || !cellData) continue;
+
+          // Series class
+          const series = cellData.track ? cellData.track.series : 0;
+          cellEl.className = `track-cell series-${series}`;
+
+          // Header
+          const seriesBadge = cellEl.querySelector('.series-badge');
+          if (seriesBadge && cellData.track) {
+            seriesBadge.textContent = String(cellData.track.track_number).padStart(2, '0');
+          }
+
+          const trackName = cellEl.querySelector('.track-name');
+          if (trackName && cellData.track) {
+            trackName.textContent = cellData.track.name || `Track ${cellData.track.track_number}`;
+          }
+
+          // Owner & Time
+          const ownerPill = cellEl.querySelector('.owner-pill');
+          if (ownerPill) {
+            if (cellData.owner && cellData.owner.alias) {
+              const aliasLower = cellData.owner.alias.toLowerCase();
+              ownerPill.className = `owner-pill owner-${aliasLower}`;
+              ownerPill.textContent = cellData.owner.alias;
+            } else {
+              ownerPill.className = 'owner-pill owner-neutral';
+              ownerPill.textContent = 'Unclaimed';
+            }
+          }
+
+          const cellTime = cellEl.querySelector('.cell-time');
+          if (cellTime) {
+            cellTime.textContent = formatTrackTime(cellData.winning_time);
+          }
+
+          const cellMargin = cellEl.querySelector('.cell-margin');
+          if (cellMargin) {
+            cellMargin.textContent = cellData.margin !== null ? `+${(cellData.margin / 1000).toFixed(3)}s` : '+0.000s';
+          }
+
+          // Top 3 Rankings
+          const rankRows = cellEl.querySelectorAll('.cell-rankings .ranking-row');
+          const rankings = cellData.rankings || [];
+          for (let i = 0; i < 3; i++) {
+            const row = rankRows[i];
+            if (!row) continue;
+            const rData = rankings[i];
+            const nameEl = row.querySelector('.rank-name');
+            const timeEl = row.querySelector('.rank-time');
+            if (rData) {
+              if (nameEl) nameEl.textContent = rData.player ? rData.player.alias : '—';
+              if (timeEl) timeEl.textContent = formatTrackTime(rData.time);
+            } else {
+              if (nameEl) nameEl.textContent = '—';
+              if (timeEl) timeEl.textContent = '--:--.---';
+            }
+          }
+        }
+      }
+    }
+
+    renderMedals(rankPoints, medalCounts) {
+      if (!medalCounts) return;
+
+      for (const [accountId, counts] of Object.entries(medalCounts)) {
+        const card = document.querySelector(`.player-card[data-player-id="${accountId}"]`);
+        if (!card) continue;
+
+        const goldEl = card.querySelector('.gold-count');
+        const silverEl = card.querySelector('.silver-count');
+        const bronzeEl = card.querySelector('.bronze-count');
+        const ptsEl = card.querySelector('.points-count');
+
+        if (goldEl) goldEl.textContent = counts.gold ?? 0;
+        if (silverEl) silverEl.textContent = counts.silver ?? 0;
+        if (bronzeEl) bronzeEl.textContent = counts.bronze ?? 0;
+
+        if (ptsEl && rankPoints && rankPoints[accountId] !== undefined) {
+          ptsEl.textContent = rankPoints[accountId];
+        }
+      }
+    }
+
+    renderRecords(records) {
+      const feed = document.getElementById('record-feed');
+      const countBadge = document.getElementById('record-count');
+      if (!feed) return;
+
+      if (!Array.isArray(records) || records.length === 0) {
+        feed.innerHTML = `
+          <div class="record-empty">
+            <span class="empty-icon">⏱️</span>
+            <p>No personal bests recorded yet.</p>
+            <p class="empty-hint">New records will appear here live during the challenge.</p>
+          </div>
+        `;
+        if (countBadge) countBadge.textContent = '0 Records';
+        return;
+      }
+
+      if (countBadge) {
+        countBadge.textContent = `${records.length} Record${records.length === 1 ? '' : 's'}`;
+      }
+
+      // Sort newest first
+      const sorted = [...records].reverse();
+      feed.innerHTML = '';
+
+      for (const r of sorted) {
+        const item = document.createElement('div');
+        item.className = 'record-item';
+
+        const observedTime = r.observed_at ? new Date(r.observed_at).toLocaleTimeString() : '';
+        const playerAlias = r.player ? r.player.alias : 'Unknown';
+        const playerLower = playerAlias.toLowerCase();
+        const trackNum = r.track ? String(r.track.track_number).padStart(2, '0') : '--';
+        const formattedTime = formatTrackTime(r.time);
+
+        item.innerHTML = `
+          <div class="record-item-meta">
+            <span class="record-time-badge font-mono">${observedTime}</span>
+            <span class="badge badge-subtle">Trk ${trackNum}</span>
+            <span class="record-player-badge record-player-${playerLower}">${playerAlias}</span>
+          </div>
+          <div class="record-score font-mono">${formattedTime}</div>
+        `;
+        feed.appendChild(item);
+      }
+    }
+
+    bindEvents() {
+      // 1. Password submit
+      const passwordForm = document.getElementById('password-form');
+      if (passwordForm) {
+        passwordForm.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const passInput = document.getElementById('password-input');
+          const errDiv = document.getElementById('password-error');
+          if (!passInput) return;
+
+          try {
+            await apiRequest('/api/auth/verify', {
+              method: 'POST',
+              body: JSON.stringify({ password: passInput.value }),
+            });
+            if (errDiv) errDiv.setAttribute('hidden', 'true');
+            this.unlockApp();
+          } catch (err) {
+            if (errDiv) {
+              errDiv.textContent = err.message || 'Incorrect password.';
+              errDiv.removeAttribute('hidden');
+            }
+          }
+        });
+      }
+
+      // 2. Lock button
+      const lockBtn = document.getElementById('btn-lock');
+      if (lockBtn) {
+        lockBtn.addEventListener('click', () => this.lockApp());
+      }
+
+      // 3. Shuffle Board
+      const shuffleBtn = document.getElementById('btn-shuffle');
+      if (shuffleBtn) {
+        shuffleBtn.addEventListener('click', async () => {
+          const newSeed = Math.floor(Math.random() * 900000) + 100000;
+          const seedInput = document.getElementById('board-seed-input');
+          if (seedInput) seedInput.value = newSeed;
+
+          try {
+            await apiRequest('/api/game/configure', {
+              method: 'POST',
+              body: JSON.stringify({ board_seed: newSeed }),
+            });
+            this.syncState();
+          } catch (err) {
+            this.showNotification(`Shuffle failed: ${err.message}`, 'danger');
+          }
+        });
+      }
+
+      // 4. Start Game
+      const startBtn = document.getElementById('btn-start-game');
+      if (startBtn) {
+        startBtn.addEventListener('click', async () => {
+          const campSelect = document.getElementById('campaign-select');
+          const seedInput = document.getElementById('board-seed-input');
+          const gameDurationInput = document.getElementById('game-duration-input');
+          const graceInput = document.getElementById('grace-period-input');
+          const timerInput = document.getElementById('timer-duration-input');
+
+          const campaignId = campSelect ? campSelect.value : '';
+          if (!campaignId) {
+            this.showNotification('Please select a campaign before starting.', 'warning');
+            return;
+          }
+
+          const payload = {
+            campaign_id: campaignId,
+            board_seed: seedInput ? parseInt(seedInput.value, 10) : 12345,
+            game_duration_seconds: gameDurationInput ? parseFloat(gameDurationInput.value) * 3600 : 18000,
+            grace_period_minutes: graceInput ? parseInt(graceInput.value, 10) : 30,
+            manual_timer_duration_seconds: timerInput ? parseInt(timerInput.value, 10) * 60 : 600,
+          };
+
+          try {
+            startBtn.disabled = true;
+            await apiRequest('/api/game/start', {
+              method: 'POST',
+              body: JSON.stringify(payload),
+            });
+            this.showNotification('Bingo game started!', 'success');
+            await this.syncState();
+          } catch (err) {
+            this.showNotification(`Failed to start game: ${err.message}`, 'danger');
+          } finally {
+            startBtn.disabled = false;
+          }
+        });
+      }
+
+      // 5. Stop Game
+      const stopBtn = document.getElementById('btn-stop-game');
+      if (stopBtn) {
+        stopBtn.addEventListener('click', async () => {
+          if (!confirm('Are you sure you want to stop the game session?')) return;
+          try {
+            await apiRequest('/api/game/stop', { method: 'POST' });
+            this.showNotification('Game stopped.', 'warning');
+            this.syncState();
+          } catch (err) {
+            this.showNotification(`Failed to stop game: ${err.message}`, 'danger');
+          }
+        });
+      }
+
+      // 6. Reset Game
+      const resetBtn = document.getElementById('btn-reset-game');
+      if (resetBtn) {
+        resetBtn.addEventListener('click', async () => {
+          if (!confirm('Are you sure you want to reset the session back to pending configuration?')) return;
+          try {
+            await apiRequest('/api/game/reset', { method: 'POST' });
+            this.showNotification('Game reset to pending setup.', 'info');
+            this.syncState();
+          } catch (err) {
+            this.showNotification(`Failed to reset game: ${err.message}`, 'danger');
+          }
+        });
+      }
+
+      // 7. Refresh Leaderboard
+      const refreshBtn = document.getElementById('btn-refresh');
+      if (refreshBtn) {
+        refreshBtn.addEventListener('click', async () => {
+          try {
+            refreshBtn.disabled = true;
+            await apiRequest('/api/game/poll', { method: 'POST' });
+            this.showNotification('Leaderboards refreshed.', 'success');
+            await this.syncState();
+          } catch (err) {
+            this.showNotification(`Refresh failed: ${err.message}`, 'danger');
+          } finally {
+            refreshBtn.disabled = false;
+          }
+        });
+      }
+
+      // 8. Timer Action Buttons
+      const timersContainer = document.getElementById('player-timers');
+      if (timersContainer) {
+        timersContainer.addEventListener('click', async (e) => {
+          const btn = e.target.closest('button[data-action]');
+          if (!btn) return;
+
+          const accountId = btn.getAttribute('data-account');
+          const action = btn.getAttribute('data-action');
+          if (!accountId || !action) return;
+
+          try {
+            btn.disabled = true;
+            const updatedTimer = await apiRequest(`/api/timers/${accountId}/action`, {
+              method: 'POST',
+              body: JSON.stringify({ action }),
+            });
+            this.timerEngine.setTimer(accountId, updatedTimer);
+          } catch (err) {
+            this.showNotification(`Timer ${action} failed: ${err.message}`, 'danger');
+          } finally {
+            btn.disabled = false;
+          }
+        });
+      }
+    }
+  }
+
+  // Create singleton engine and controller
+  const engine = new TimerEngine();
+  const controller = new AppController(engine);
+
+  // Auto-init on DOMContentLoaded in browser
   if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', () => engine.start());
+      document.addEventListener('DOMContentLoaded', () => controller.init());
     } else {
-      engine.start();
+      controller.init();
     }
   }
 
   return {
     formatTime,
+    formatTrackTime,
     calculateTimerState,
     calculateSessionTime,
     TimerEngine,
+    AppController,
     engine,
+    controller,
   };
 });
