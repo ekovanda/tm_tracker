@@ -384,3 +384,17 @@ def test_static_directory_serves_html():
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
     assert "Trackmania Bingo Tracker" in response.text
+
+
+def test_static_app_js():
+    response = client.get("/static/app.js")
+    assert response.status_code == 200
+    assert (
+        "javascript" in response.headers["content-type"]
+        or "application/x-javascript" in response.headers["content-type"]
+    )
+    text = response.text
+    assert "formatTime" in text
+    assert "calculateTimerState" in text
+    assert "calculateSessionTime" in text
+    assert "TimerEngine" in text
