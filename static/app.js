@@ -287,14 +287,30 @@
   // --- API Client ---
 
   async function apiRequest(url, options = {}) {
+    const token = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('tm_tracker_token') : null;
+    const headers = {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     try {
       const response = await fetch(url, {
-        headers: {
-          'Content-Type': 'application/json',
-          ...options.headers,
-        },
         ...options,
+        headers,
       });
+
+      if (response.status === 401) {
+        if (typeof sessionStorage !== 'undefined') {
+          sessionStorage.removeItem('tm_tracker_token');
+          sessionStorage.removeItem('tm_tracker_auth');
+        }
+        if (typeof window !== 'undefined' && window.appController) {
+          window.appController.lockApp();
+        }
+      }
 
       if (!response.ok) {
         let errMessage = `Request failed: ${response.statusText}`;
@@ -330,9 +346,10 @@
     init() {
       this.bindEvents();
 
-      // Check existing session auth
+      // Check existing session auth and token
       const savedAuth = sessionStorage.getItem('tm_tracker_auth');
-      if (savedAuth === 'true') {
+      const savedToken = sessionStorage.getItem('tm_tracker_token');
+      if (savedAuth === 'true' && savedToken) {
         this.unlockApp();
       } else {
         this.showAuthGate();
@@ -360,6 +377,7 @@
     lockApp() {
       this.isAuthenticated = false;
       sessionStorage.removeItem('tm_tracker_auth');
+      sessionStorage.removeItem('tm_tracker_token');
       this.stopPolling();
       this.showAuthGate();
     }
@@ -652,10 +670,13 @@
           if (!passInput) return;
 
           try {
-            await apiRequest('/api/auth/verify', {
+            const authData = await apiRequest('/api/auth/verify', {
               method: 'POST',
               body: JSON.stringify({ password: passInput.value }),
             });
+            if (authData && authData.token) {
+              sessionStorage.setItem('tm_tracker_token', authData.token);
+            }
             if (errDiv) errDiv.setAttribute('hidden', 'true');
             this.unlockApp();
           } catch (err) {
@@ -712,9 +733,9 @@
           const payload = {
             campaign_id: campaignId,
             board_seed: seedInput ? parseInt(seedInput.value, 10) : 12345,
-            game_duration_seconds: gameDurationInput ? parseFloat(gameDurationInput.value) * 3600 : 18000,
-            grace_period_minutes: graceInput ? parseInt(graceInput.value, 10) : 30,
-            manual_timer_duration_seconds: timerInput ? parseInt(timerInput.value, 10) * 60 : 600,
+            game_duration_seconds: gameDurationInput ? Math.round(parseFloat(gameDurationInput.value) * 3600) : 18000,
+            grace_period_seconds: graceInput ? Math.round(parseInt(graceInput.value, 10) * 60) : 1800,
+            manual_timer_duration_seconds: timerInput ? Math.round(parseInt(timerInput.value, 10) * 60) : 600,
           };
 
           try {
@@ -811,6 +832,9 @@
   // Create singleton engine and controller
   const engine = new TimerEngine();
   const controller = new AppController(engine);
+  if (typeof window !== 'undefined') {
+    window.appController = controller;
+  }
 
   // Auto-init on DOMContentLoaded in browser
   if (typeof window !== 'undefined' && typeof document !== 'undefined') {
