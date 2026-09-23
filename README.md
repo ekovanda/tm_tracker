@@ -122,6 +122,7 @@ See [DEVELOPER.md](DEVELOPER.md) for detailed architecture, persistence models, 
 ## Documentation
 
 - [Developer technical documentation](DEVELOPER.md)
+- [Infrastructure setup guide](development-docs/INFRASTRUCTURE-SETUP.md)
 - [Implementation plan](development-docs/IMPLEMENTATION-PLAN.md)
 - [Changelog](development-docs/CHANGELOG.md)
 - [Sketchbook](development-docs/SKETCHBOOK.md)

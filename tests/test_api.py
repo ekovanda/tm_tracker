@@ -10,7 +10,11 @@ from api import (
     init_storage,
     set_cached_service_token,
 )
-from authentication import PasswordConfigurationError, UbisoftAuthenticationError
+from authentication import (
+    PasswordConfigurationError,
+    UbisoftAuthenticationError,
+    create_session_token,
+)
 from bingo import ManualTimerState
 from bingo_service import (
     SHARED_CANONICAL_GAME,
@@ -21,7 +25,8 @@ from player import PLAYERS
 from storage import InMemoryGameStateStore
 from track import Track
 
-client = TestClient(app)
+AUTH_HEADER = {"Authorization": f"Bearer {create_session_token('test_admin')}"}
+client = TestClient(app, headers=AUTH_HEADER)
 
 
 def test_health_check():
@@ -43,7 +48,45 @@ def test_verify_password_success():
     with patch("api.verify_app_password", return_value=True):
         response = client.post("/api/auth/verify", json={"password": "valid_password"})
         assert response.status_code == 200
-        assert response.json() == {"authenticated": True}
+        data = response.json()
+        assert data["authenticated"] is True
+        assert "token" in data and len(data["token"]) > 0
+
+
+def test_require_auth_enforcement():
+    unauth = TestClient(app)
+    # 1. Missing token on protected endpoints -> 401
+    assert unauth.get("/api/campaigns").status_code == 401
+    assert unauth.post("/api/game/configure", json={}).status_code == 401
+    assert unauth.post("/api/game/start", json={}).status_code == 401
+    assert unauth.post("/api/game/stop").status_code == 401
+    assert unauth.post("/api/game/reset").status_code == 401
+    assert unauth.post("/api/game/poll").status_code == 401
+    p0 = PLAYERS[0]
+    assert (
+        unauth.post(
+            f"/api/timers/{p0.account_id}/action", json={"action": "start"}
+        ).status_code
+        == 401
+    )
+
+    # 2. Invalid auth schemes and invalid tokens -> 401
+    assert (
+        unauth.get("/api/campaigns", headers={"Authorization": "Basic 123"}).status_code
+        == 401
+    )
+    assert (
+        unauth.get(
+            "/api/campaigns", headers={"Authorization": "Bearer not-a-valid-token"}
+        ).status_code
+        == 401
+    )
+    assert (
+        unauth.get(
+            "/api/campaigns", headers={"Authorization": "Bearer token.with.extra.dots"}
+        ).status_code
+        == 401
+    )
 
 
 def test_verify_password_unauthorized():

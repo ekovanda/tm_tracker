@@ -9,7 +9,7 @@ from pathlib import Path
 from threading import Lock
 from typing import Any, cast
 
-from fastapi import FastAPI, HTTPException, Request, Response, status
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -19,9 +19,11 @@ import live_services
 from authentication import (
     PasswordConfigurationError,
     UbisoftAuthenticationError,
+    create_session_token,
     ensure_nadeo_service_token,
     get_nadeo_service_token,
     verify_app_password,
+    verify_session_token,
 )
 from bingo import (
     BingoSettings,
@@ -182,11 +184,41 @@ class VerifyPasswordRequest(BaseModel):
 
 class VerifyPasswordResponse(BaseModel):
     authenticated: bool
+    token: str | None = None
 
 
 class CampaignResponse(BaseModel):
     campaign_id: str
     name: str
+
+
+def require_auth(authorization: str | None = Header(None)) -> str:
+    """Validate Bearer session token on protected endpoints."""
+
+    if not authorization:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication token required.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    parts = authorization.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authorization scheme. Use 'Bearer <token>'.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    token = parts[1]
+    if not verify_session_token(token):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session token is invalid or expired.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return token
 
 
 @app.get("/health", tags=["system"])
@@ -228,10 +260,16 @@ def verify_password(payload: VerifyPasswordRequest) -> VerifyPasswordResponse:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect application password.",
         )
-    return VerifyPasswordResponse(authenticated=True)
+    token = create_session_token("tm_tracker_user")
+    return VerifyPasswordResponse(authenticated=True, token=token)
 
 
-@app.get("/api/campaigns", response_model=list[CampaignResponse], tags=["campaigns"])
+@app.get(
+    "/api/campaigns",
+    response_model=list[CampaignResponse],
+    dependencies=[Depends(require_auth)],
+    tags=["campaigns"],
+)
 def get_campaigns() -> list[CampaignResponse]:
     """Load official campaigns from Nadeo Live Services."""
 
@@ -406,7 +444,7 @@ def get_game_state() -> dict[str, Any]:
     return _serialize_canonical_game(SHARED_CANONICAL_GAME.get(), datetime.now(UTC))
 
 
-@app.post("/api/game/configure", tags=["game"])
+@app.post("/api/game/configure", dependencies=[Depends(require_auth)], tags=["game"])
 def configure_game(payload: ConfigureGameRequest) -> dict[str, Any]:
     """Update pending setup values before the canonical game starts."""
 
@@ -455,7 +493,7 @@ def configure_game(payload: ConfigureGameRequest) -> dict[str, Any]:
     return _serialize_canonical_game(updated, datetime.now(UTC))
 
 
-@app.post("/api/game/start", tags=["game"])
+@app.post("/api/game/start", dependencies=[Depends(require_auth)], tags=["game"])
 def start_game(payload: StartGameRequest) -> dict[str, Any]:
     """Atomically start the canonical game for all viewers."""
 
@@ -518,7 +556,7 @@ def start_game(payload: StartGameRequest) -> dict[str, Any]:
     return _serialize_canonical_game(updated, datetime.now(UTC))
 
 
-@app.post("/api/game/stop", tags=["game"])
+@app.post("/api/game/stop", dependencies=[Depends(require_auth)], tags=["game"])
 def stop_game() -> dict[str, Any]:
     """Stop the active canonical game."""
 
@@ -532,7 +570,7 @@ def stop_game() -> dict[str, Any]:
     return _serialize_canonical_game(updated, datetime.now(UTC))
 
 
-@app.post("/api/game/reset", tags=["game"])
+@app.post("/api/game/reset", dependencies=[Depends(require_auth)], tags=["game"])
 def reset_game() -> dict[str, Any]:
     """Reset the canonical game to pending setup."""
 
@@ -541,7 +579,7 @@ def reset_game() -> dict[str, Any]:
     return _serialize_canonical_game(updated, datetime.now(UTC))
 
 
-@app.post("/api/game/poll", tags=["game"])
+@app.post("/api/game/poll", dependencies=[Depends(require_auth)], tags=["game"])
 def poll_game() -> dict[str, Any]:
     """Poll leaderboards and apply updates to the canonical session."""
 
@@ -570,7 +608,11 @@ def get_timers() -> list[dict[str, Any]]:
     ]
 
 
-@app.post("/api/timers/{account_id}/action", tags=["timers"])
+@app.post(
+    "/api/timers/{account_id}/action",
+    dependencies=[Depends(require_auth)],
+    tags=["timers"],
+)
 def timer_action(account_id: str, payload: TimerActionRequest) -> dict[str, Any]:
     """Start, stop, or restart a player timer."""
 
