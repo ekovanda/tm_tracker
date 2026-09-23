@@ -8,6 +8,7 @@ import pytest
 import authentication
 from authentication import (
     UbisoftAuthenticationError,
+    create_session_token,
     decode_jwt_payload,
     encode_basic_auth,
     ensure_nadeo_service_token,
@@ -16,6 +17,7 @@ from authentication import (
     get_ubisoft_authentication_ticket,
     get_user_agent,
     refresh_nadeo_service_token,
+    verify_session_token,
 )
 
 
@@ -235,3 +237,101 @@ def test_ensure_token_falls_back_to_service_token_when_refresh_fails():
         "accessToken": "fresh-service-token",
         "refreshToken": "fresh-refresh",
     }
+
+
+def test_get_secret_resolves_from_environ(monkeypatch):
+    monkeypatch.setenv("TEST_ENV_VAR", "configured_value")
+    # pylint: disable=protected-access
+    assert authentication._get_secret("TEST_ENV_VAR") == "configured_value"
+    assert authentication._get_secret("NON_EXISTENT_VAR", "fallback") == "fallback"
+
+
+def test_session_token_creation_and_verification():
+    token = create_session_token("custom_subject", expires_in_seconds=3600)
+    assert verify_session_token(token) is True
+
+
+def test_session_token_rejects_expired():
+    token = create_session_token("expired_subject", expires_in_seconds=-10)
+    assert verify_session_token(token) is False
+
+
+def test_session_token_rejects_tampered_or_invalid():
+    assert verify_session_token("") is False
+    assert verify_session_token("invalid") is False
+    assert verify_session_token("a.b.c") is False
+
+    valid_token = create_session_token("valid_user")
+    payload_b64, _ = valid_token.split(".")
+    tampered_sig = payload_b64 + ".dGFtcGVyZWQ="
+    assert verify_session_token(tampered_sig) is False
+
+    tampered_payload = "bm90LWpzb24." + "dGVzdA=="
+    assert verify_session_token(tampered_payload) is False
+
+
+def test_session_token_custom_secret_key(monkeypatch):
+    monkeypatch.setenv("SESSION_SECRET_KEY", "custom-secret-key-12345")
+    token = create_session_token("user")
+    assert verify_session_token(token) is True
+
+    monkeypatch.setenv("SESSION_SECRET_KEY", "different-secret-key-67890")
+    assert verify_session_token(token) is False
+
+
+def test_session_token_malformed_base64_and_non_dict():
+    # Invalid base64 in signature
+    assert verify_session_token("dGVzdA.???invalid-base64???") is False
+    # Non-dict JSON payload
+    non_dict_payload = (
+        base64.urlsafe_b64encode(b'"just a string"').decode("ascii").rstrip("=")
+    )
+    # pylint: disable=protected-access
+    sig = (
+        base64.urlsafe_b64encode(
+            authentication.hmac.new(
+                authentication._get_session_signing_key(),
+                non_dict_payload.encode("ascii"),
+                authentication.hashlib.sha256,
+            ).digest()
+        )
+        .decode("ascii")
+        .rstrip("=")
+    )
+    assert verify_session_token(f"{non_dict_payload}.{sig}") is False
+
+
+def test_verify_app_password_with_env_hash(monkeypatch):
+    salt = authentication.secrets.token_bytes(16)
+    digest = authentication.hashlib.pbkdf2_hmac("sha256", b"my_password", salt, 100_000)
+    salt_b64 = base64.urlsafe_b64encode(salt).decode("ascii")
+    digest_b64 = base64.urlsafe_b64encode(digest).decode("ascii")
+    hash_str = f"pbkdf2_sha256$100000${salt_b64}${digest_b64}"
+
+    monkeypatch.setenv("APP_PASSWORD_HASH", hash_str)
+    assert authentication.verify_app_password("my_password") is True
+    assert authentication.verify_app_password("wrong_password") is False
+
+
+def test_verify_app_password_configuration_errors(monkeypatch):
+    monkeypatch.delenv("APP_PASSWORD_HASH", raising=False)
+    with patch.object(authentication, "APP_PASSWORD_HASH", None):
+        with pytest.raises(
+            authentication.PasswordConfigurationError, match="Missing APP_PASSWORD_HASH"
+        ):
+            authentication.verify_app_password("password")
+
+        with pytest.raises(
+            authentication.PasswordConfigurationError, match="pbkdf2_sha256"
+        ):
+            authentication.verify_app_password(
+                "password", encoded_hash="invalid_format"
+            )
+
+        valid_b64 = base64.urlsafe_b64encode(b"1234567890123456").decode("ascii")
+        with pytest.raises(
+            authentication.PasswordConfigurationError, match="valid PBKDF2-SHA256"
+        ):
+            authentication.verify_app_password(
+                "password", encoded_hash=f"pbkdf2_sha256$100${valid_b64}${valid_b64}"
+            )

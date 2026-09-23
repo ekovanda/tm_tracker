@@ -1,6 +1,9 @@
 import base64
+import binascii
 import hashlib
+import hmac
 import json
+import os
 import secrets
 from datetime import UTC, datetime, timedelta
 
@@ -14,12 +17,22 @@ logger = get_logger("authentication")
 
 
 def _get_secret(name: str, default: str | None = None) -> str | None:
-    """Read an app setting from Streamlit-managed secrets."""
+    """Read an app setting from Streamlit-managed secrets or environment variables."""
 
     try:
-        return st.secrets.get(name, default)
-    except (FileNotFoundError, RuntimeError):
-        return default
+        val = st.secrets.get(name)
+        if val is not None:
+            return str(val)
+    except (FileNotFoundError, RuntimeError, AttributeError, KeyError):
+        logger.debug(
+            "Secret '%s' not present in st.secrets; falling back to environment.", name
+        )
+
+    env_val = os.environ.get(name)
+    if env_val is not None:
+        return env_val
+
+    return default
 
 
 BASIC_AUTH = _get_secret("BASIC_AUTH")
@@ -33,6 +46,7 @@ TOKEN_REFRESH_URL = (
 )
 ACCESS_TOKEN_EXPIRY_KEY = "accessTokenExpiresAt"
 TOKEN_REFRESH_SKEW = timedelta(minutes=5)
+_RUNTIME_SECRET_KEY: bytes | None = None
 
 
 class UbisoftAuthenticationError(RuntimeError):
@@ -43,14 +57,93 @@ class PasswordConfigurationError(RuntimeError):
     """Raised when the application password hash is missing or malformed."""
 
 
+def _get_session_signing_key() -> bytes:
+    """Retrieve or generate the secret key used for HMAC session tokens."""
+
+    key_str = _get_secret("SESSION_SECRET_KEY")
+    if key_str:
+        return key_str.encode("utf-8")
+
+    pwd_hash = APP_PASSWORD_HASH or _get_secret("APP_PASSWORD_HASH")
+    if pwd_hash:
+        return hashlib.sha256(pwd_hash.encode("utf-8")).digest()
+
+    global _RUNTIME_SECRET_KEY  # pylint: disable=global-statement
+    if _RUNTIME_SECRET_KEY is None:
+        _RUNTIME_SECRET_KEY = secrets.token_bytes(32)
+    return _RUNTIME_SECRET_KEY
+
+
+def create_session_token(
+    subject: str = "app_user", expires_in_seconds: int = 86400
+) -> str:
+    """Generate a signed HMAC-SHA256 bearer session token."""
+
+    now = int(datetime.now(UTC).timestamp())
+    payload = {
+        "sub": subject,
+        "iat": now,
+        "exp": now + expires_in_seconds,
+        "nonce": secrets.token_hex(8),
+    }
+    payload_json = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    payload_b64 = base64.urlsafe_b64encode(payload_json).decode("ascii").rstrip("=")
+    signature = hmac.new(
+        _get_session_signing_key(), payload_b64.encode("ascii"), hashlib.sha256
+    ).digest()
+    sig_b64 = base64.urlsafe_b64encode(signature).decode("ascii").rstrip("=")
+    return f"{payload_b64}.{sig_b64}"
+
+
+def verify_session_token(token: str) -> bool:
+    """Verify an HMAC-SHA256 session token signature and expiration."""
+
+    if not token or "." not in token:
+        return False
+
+    parts = token.split(".")
+    if len(parts) != 2:
+        return False
+
+    payload_b64, sig_b64 = parts
+    try:
+        expected_sig = hmac.new(
+            _get_session_signing_key(), payload_b64.encode("ascii"), hashlib.sha256
+        ).digest()
+
+        rem_sig = len(sig_b64) % 4
+        padded_sig = sig_b64 + ("=" * (4 - rem_sig) if rem_sig else "")
+        actual_sig = base64.urlsafe_b64decode(padded_sig.encode("ascii"))
+        if not hmac.compare_digest(expected_sig, actual_sig):
+            return False
+
+        rem_payload = len(payload_b64) % 4
+        padded_payload = payload_b64 + ("=" * (4 - rem_payload) if rem_payload else "")
+        payload = json.loads(
+            base64.urlsafe_b64decode(padded_payload.encode("ascii")).decode("utf-8")
+        )
+        if not isinstance(payload, dict):
+            return False
+
+        exp = int(payload.get("exp", 0))
+        now = int(datetime.now(UTC).timestamp())
+        return now <= exp
+    except (ValueError, TypeError, binascii.Error, json.JSONDecodeError):
+        return False
+
+
 def verify_app_password(password: str, encoded_hash: str | None = None) -> bool:
     """Verify an app password against a PBKDF2-SHA256 encoded hash."""
 
-    stored_hash = encoded_hash if encoded_hash is not None else APP_PASSWORD_HASH
+    stored_hash = (
+        encoded_hash
+        if encoded_hash is not None
+        else (APP_PASSWORD_HASH or _get_secret("APP_PASSWORD_HASH"))
+    )
     if not stored_hash:
         raise PasswordConfigurationError(
             "Missing APP_PASSWORD_HASH. Set a PBKDF2 password hash in "
-            ".streamlit/secrets.toml."
+            ".streamlit/secrets.toml or APP_PASSWORD_HASH environment variable."
         )
 
     try:
@@ -82,8 +175,10 @@ def verify_app_password(password: str, encoded_hash: str | None = None) -> bool:
 def get_user_agent() -> str:
     """Build the identifying User-Agent shared by all service requests."""
 
-    contact = EMAIL or "contact configured through EMAIL"
-    return f"{PROJECT_NAME} / {MAINTAINER_HANDLE} / {contact}"
+    contact = _get_secret("EMAIL") or EMAIL or "contact configured through EMAIL"
+    project_name = _get_secret("PROJECT_NAME") or PROJECT_NAME
+    maintainer = _get_secret("MAINTAINER_HANDLE") or MAINTAINER_HANDLE
+    return f"{project_name} / {maintainer} / {contact}"
 
 
 def get_ubisoft_authentication_ticket() -> str:
@@ -95,7 +190,9 @@ def get_ubisoft_authentication_ticket() -> str:
     Gets value for key "ticket" in larger Dict.
     """
 
-    if not BASIC_AUTH:
+    basic_auth = BASIC_AUTH or _get_secret("BASIC_AUTH")
+
+    if not basic_auth:
         raise UbisoftAuthenticationError(
             "Missing BASIC_AUTH. Set a valid Ubisoft Basic authorization value in .env."
         )
@@ -103,7 +200,7 @@ def get_ubisoft_authentication_ticket() -> str:
     headers = {
         "Content-Type": "application/json",
         "Ubi-AppId": UBISOFT_APP_ID,
-        "Authorization": BASIC_AUTH,
+        "Authorization": basic_auth,
         "User-Agent": get_user_agent(),
     }
 
