@@ -197,6 +197,25 @@ def test_configure_game():
     assert data["pending"]["settings"]["manual_timer_duration_seconds"] == 5 * 60
 
 
+def test_configure_and_start_game_with_seconds():
+    client.post("/api/game/reset")
+    response = client.post(
+        "/api/game/configure",
+        json={
+            "campaign_id": "seconds_campaign",
+            "board_seed": 999,
+            "game_duration_seconds": 7200,
+            "grace_period_seconds": 900,
+            "manual_timer_duration_seconds": 450,
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["pending"]["settings"]["game_duration_seconds"] == 7200
+    assert data["pending"]["settings"]["grace_period_seconds"] == 900
+    assert data["pending"]["settings"]["manual_timer_duration_seconds"] == 450
+
+
 def test_start_game_validation():
     # If no campaign is configured or provided
     client.post("/api/game/reset")
@@ -228,6 +247,18 @@ def test_game_full_lifecycle():
             assert game_data["status"] == "active"
             assert game_data["session"]["campaign_id"] == "summer_2026"
             assert len(game_data["session"]["board"]) == 4
+
+            # Verify serialization alignments
+            cell_0 = game_data["session"]["board"][0][0]
+            assert "track_number" in cell_0["track"]
+            assert "series" in cell_0["track"]
+            assert cell_0["track"]["series"] in (1, 2, 3, 4)
+            assert "winning_time" in cell_0
+            assert "medal_counts" in game_data["session"]
+            assert "rank_points" in game_data["session"]
+            for player in PLAYERS:
+                assert player.account_id in game_data["session"]["medal_counts"]
+                assert player.account_id in game_data["session"]["rank_points"]
 
             # 2. Starting again causes 409 Conflict
             duplicate_start = client.post(

@@ -303,18 +303,28 @@ def get_campaigns() -> list[CampaignResponse]:
 def _serialize_player(player: Player | None) -> dict[str, Any] | None:
     if player is None:
         return None
-    return {"account_id": player.account_id, "name": player.name}
+    return {
+        "account_id": player.account_id,
+        "name": player.name,
+        "alias": getattr(player, "alias", player.name),
+    }
 
 
 def _serialize_track(track: Track) -> dict[str, Any]:
+    series = (track.number - 1) // 5 + 1 if track.number is not None else 0
     return {
         "uid": track.uid,
         "name": track.name,
         "number": track.number,
+        "track_number": track.number,
+        "series": series,
     }
 
 
 def _serialize_cell(cell: Any) -> dict[str, Any]:
+    winning_time = (
+        cell.rankings[0].time if (cell.owner is not None and cell.rankings) else None
+    )
     return {
         "track": _serialize_track(cell.track),
         "rankings": [
@@ -322,6 +332,7 @@ def _serialize_cell(cell: Any) -> dict[str, Any]:
             for r in cell.rankings
         ],
         "owner": _serialize_player(cell.owner),
+        "winning_time": winning_time,
         "margin": cell.margin,
     }
 
@@ -346,6 +357,38 @@ def _serialize_timer(
         "duration_seconds": timer.duration.total_seconds(),
         "remaining_seconds": max(0.0, remaining),
     }
+
+
+def _compute_player_medals(
+    board: Any,
+) -> tuple[dict[str, dict[str, int]], dict[str, int]]:
+    medal_counts: dict[str, dict[str, int]] = {}
+    rank_points: dict[str, int] = {}
+    for p in PLAYERS:
+        counts = {"gold": 0, "silver": 0, "bronze": 0, "unfinished": 0}
+        for row in board:
+            for cell in row:
+                rankings: list[Any] = list(getattr(cell, "rankings", ()))
+                if len(rankings) > 0 and rankings[0].player.account_id == p.account_id:
+                    counts["gold"] += 1
+                elif (
+                    len(rankings) > 1 and rankings[1].player.account_id == p.account_id
+                ):
+                    counts["silver"] += 1
+                elif (
+                    len(rankings) > 2 and rankings[2].player.account_id == p.account_id
+                ):
+                    counts["bronze"] += 1
+                else:
+                    counts["unfinished"] += 1
+        medal_counts[p.account_id] = counts
+        rank_points[p.account_id] = (
+            1 * counts["gold"]
+            + 2 * counts["silver"]
+            + 3 * counts["bronze"]
+            + 5 * counts["unfinished"]
+        )
+    return medal_counts, rank_points
 
 
 def _serialize_canonical_game(
@@ -396,6 +439,8 @@ def _serialize_canonical_game(
     else:
         raw_board = ()
 
+    medal_counts, rank_points = _compute_player_medals(raw_board)
+
     return {
         "status": state.status,
         "pending": pending_payload,
@@ -413,6 +458,8 @@ def _serialize_canonical_game(
             "game_remaining_seconds": game_remaining,
             "board": [[_serialize_cell(cell) for cell in row] for row in raw_board],
             "records": [_serialize_record(r) for r in session.records],
+            "medal_counts": medal_counts,
+            "rank_points": rank_points,
         },
     }
 
@@ -421,16 +468,22 @@ class ConfigureGameRequest(BaseModel):
     campaign_id: str | None = None
     board_seed: int | None = None
     game_duration_minutes: int | None = None
+    game_duration_seconds: int | None = None
     grace_period_minutes: int | None = None
+    grace_period_seconds: int | None = None
     manual_timer_duration_minutes: int | None = None
+    manual_timer_duration_seconds: int | None = None
 
 
 class StartGameRequest(BaseModel):
     campaign_id: str | None = None
     board_seed: int | None = None
     game_duration_minutes: int | None = None
+    game_duration_seconds: int | None = None
     grace_period_minutes: int | None = None
+    grace_period_seconds: int | None = None
     manual_timer_duration_minutes: int | None = None
+    manual_timer_duration_seconds: int | None = None
 
 
 class TimerActionRequest(BaseModel):
@@ -457,19 +510,31 @@ def configure_game(payload: ConfigureGameRequest) -> dict[str, Any]:
 
     current_settings = snapshot.pending.settings
     game_duration = (
-        timedelta(minutes=payload.game_duration_minutes)
-        if payload.game_duration_minutes is not None
-        else current_settings.game_duration
+        timedelta(seconds=payload.game_duration_seconds)
+        if payload.game_duration_seconds is not None
+        else (
+            timedelta(minutes=payload.game_duration_minutes)
+            if payload.game_duration_minutes is not None
+            else current_settings.game_duration
+        )
     )
     grace_period = (
-        timedelta(minutes=payload.grace_period_minutes)
-        if payload.grace_period_minutes is not None
-        else current_settings.grace_period
+        timedelta(seconds=payload.grace_period_seconds)
+        if payload.grace_period_seconds is not None
+        else (
+            timedelta(minutes=payload.grace_period_minutes)
+            if payload.grace_period_minutes is not None
+            else current_settings.grace_period
+        )
     )
     manual_timer_duration = (
-        timedelta(minutes=payload.manual_timer_duration_minutes)
-        if payload.manual_timer_duration_minutes is not None
-        else current_settings.manual_timer_duration
+        timedelta(seconds=payload.manual_timer_duration_seconds)
+        if payload.manual_timer_duration_seconds is not None
+        else (
+            timedelta(minutes=payload.manual_timer_duration_minutes)
+            if payload.manual_timer_duration_minutes is not None
+            else current_settings.manual_timer_duration
+        )
     )
     board_seed = (
         payload.board_seed
@@ -506,22 +571,37 @@ def start_game(payload: StartGameRequest) -> dict[str, Any]:
         )
 
     current_settings = snapshot.pending.settings
-    settings = BingoSettings(
-        game_duration=(
+    game_duration = (
+        timedelta(seconds=payload.game_duration_seconds)
+        if payload.game_duration_seconds is not None
+        else (
             timedelta(minutes=payload.game_duration_minutes)
             if payload.game_duration_minutes is not None
             else current_settings.game_duration
-        ),
-        grace_period=(
+        )
+    )
+    grace_period = (
+        timedelta(seconds=payload.grace_period_seconds)
+        if payload.grace_period_seconds is not None
+        else (
             timedelta(minutes=payload.grace_period_minutes)
             if payload.grace_period_minutes is not None
             else current_settings.grace_period
-        ),
-        manual_timer_duration=(
+        )
+    )
+    manual_timer_duration = (
+        timedelta(seconds=payload.manual_timer_duration_seconds)
+        if payload.manual_timer_duration_seconds is not None
+        else (
             timedelta(minutes=payload.manual_timer_duration_minutes)
             if payload.manual_timer_duration_minutes is not None
             else current_settings.manual_timer_duration
-        ),
+        )
+    )
+    settings = BingoSettings(
+        game_duration=game_duration,
+        grace_period=grace_period,
+        manual_timer_duration=manual_timer_duration,
         board_seed=(
             payload.board_seed
             if payload.board_seed is not None
