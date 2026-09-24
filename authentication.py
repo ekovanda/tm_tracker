@@ -15,6 +15,29 @@ from logger import get_logger
 logger = get_logger("authentication")
 
 
+def _load_env_file() -> None:
+    """Load key-value pairs from local .env into os.environ if not already present."""
+    env_path = os.path.join(os.path.dirname(__file__), ".env")
+    if not os.path.exists(env_path):
+        return
+    try:
+        with open(env_path, "r", encoding="utf-8") as f:
+            for line in f:
+                stripped = line.strip()
+                if not stripped or stripped.startswith("#") or "=" not in stripped:
+                    continue
+                key, val = stripped.split("=", 1)
+                clean_key = key.strip()
+                clean_val = val.strip().strip("'\"")
+                if clean_key and clean_key not in os.environ:
+                    os.environ[clean_key] = clean_val
+    except OSError:
+        pass
+
+
+_load_env_file()
+
+
 def _get_secret(name: str, default: str | None = None) -> str | None:
     """Read an app setting from environment variables."""
 
