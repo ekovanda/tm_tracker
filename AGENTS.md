@@ -17,8 +17,8 @@
 
 ## Python and Dependencies
 
-- Use the project virtual environment for Python execution, development commands, and validation. Create it with `uv venv .venv_tm_tracker`, then activate it in PowerShell with `.\.venv_tm_tracker\Scripts\Activate.ps1` before running commands.
-- Install dependencies with `uv pip install --python .venv_tm_tracker\Scripts\python.exe -e ".[dev]"`.
+- Use the project virtual environment for Python execution, development commands, and validation. Create it with `uv venv .venv_tm_bingo`, then activate it in PowerShell with `.\.venv_tm_bingo\Scripts\Activate.ps1` before running commands.
+- Install dependencies with `uv pip install --python .venv_tm_bingo\Scripts\python.exe -e ".[dev]"`.
 - Prefer the existing dependencies and simple standard-library solutions before adding a package.
 - Run project commands from the repository root with the activated virtual environment, for example `uv run --active python -m pytest` or `uv run --active streamlit run streamlit_app.py`.
 - Never expose, print, commit, or hard-code secrets. Treat `.env` and credentials as private.

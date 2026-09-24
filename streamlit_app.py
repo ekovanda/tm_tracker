@@ -22,7 +22,7 @@ def _application_version() -> str:
     """Return the installed package version without duplicating metadata."""
 
     try:
-        return version("tm-tracker")
+        return version("tm-bingo")
     except PackageNotFoundError:
         return "unknown"
 

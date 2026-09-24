@@ -1,4 +1,4 @@
-"""FastAPI service entrypoint for Trackmania Tracker."""
+"""FastAPI service entrypoint for Trackmania Bingo."""
 
 import asyncio
 import time
@@ -58,7 +58,7 @@ logger = get_logger("api")
 
 def _application_version() -> str:
     try:
-        return version("tm-tracker")
+        return version("tm-bingo")
     except PackageNotFoundError:
         return "0.1.0"
 
@@ -345,7 +345,7 @@ def verify_password(payload: VerifyPasswordRequest) -> VerifyPasswordResponse:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect application password.",
         )
-    token = create_session_token("tm_tracker_user")
+    token = create_session_token("tm_bingo_user")
     return VerifyPasswordResponse(authenticated=True, token=token)
 
 

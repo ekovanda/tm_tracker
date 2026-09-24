@@ -287,7 +287,7 @@
   // --- API Client ---
 
   async function apiRequest(url, options = {}) {
-    const token = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('tm_tracker_token') : null;
+    const token = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('tm_bingo_token') : null;
     const headers = {
       'Content-Type': 'application/json',
       ...options.headers,
@@ -304,8 +304,8 @@
 
       if (response.status === 401) {
         if (typeof sessionStorage !== 'undefined') {
-          sessionStorage.removeItem('tm_tracker_token');
-          sessionStorage.removeItem('tm_tracker_auth');
+          sessionStorage.removeItem('tm_bingo_token');
+          sessionStorage.removeItem('tm_bingo_auth');
         }
         if (typeof window !== 'undefined' && window.appController) {
           window.appController.lockApp();
@@ -347,8 +347,8 @@
       this.bindEvents();
 
       // Check existing session auth and token
-      const savedAuth = sessionStorage.getItem('tm_tracker_auth');
-      const savedToken = sessionStorage.getItem('tm_tracker_token');
+      const savedAuth = sessionStorage.getItem('tm_bingo_auth');
+      const savedToken = sessionStorage.getItem('tm_bingo_token');
       if (savedAuth === 'true' && savedToken) {
         this.unlockApp();
       } else {
@@ -364,7 +364,7 @@
 
     unlockApp() {
       this.isAuthenticated = true;
-      sessionStorage.setItem('tm_tracker_auth', 'true');
+      sessionStorage.setItem('tm_bingo_auth', 'true');
       const gate = document.getElementById('password-gate');
       if (gate) gate.setAttribute('hidden', 'true');
 
@@ -376,8 +376,8 @@
 
     lockApp() {
       this.isAuthenticated = false;
-      sessionStorage.removeItem('tm_tracker_auth');
-      sessionStorage.removeItem('tm_tracker_token');
+      sessionStorage.removeItem('tm_bingo_auth');
+      sessionStorage.removeItem('tm_bingo_token');
       this.stopPolling();
       this.showAuthGate();
     }
@@ -757,7 +757,7 @@
               body: JSON.stringify({ password: passInput.value }),
             });
             if (authData && authData.token) {
-              sessionStorage.setItem('tm_tracker_token', authData.token);
+              sessionStorage.setItem('tm_bingo_token', authData.token);
             }
             if (errDiv) errDiv.setAttribute('hidden', 'true');
             this.unlockApp();

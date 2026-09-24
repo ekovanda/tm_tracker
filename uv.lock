@@ -1470,7 +1470,7 @@ wheels = [
 ]
 
 [[package]]
-name = "tm-tracker"
+name = "tm-bingo"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

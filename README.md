@@ -1,6 +1,6 @@
-# Trackmania Tracker
+# Trackmania Bingo
 
-Trackmania Tracker is a live tracking application for running three-player Trackmania Bingo challenge sessions against official Nadeo campaigns. It features a decoupled FastAPI backend with persistent Google Cloud Firestore session checkpointing, a modern dark-themed HTML5/JS single-page frontend, structured Cloud Logging, and legacy Streamlit support.
+Trackmania Bingo is a live tracking application for running three-player Trackmania Bingo challenge sessions against official Nadeo campaigns. It features a decoupled FastAPI backend with persistent Google Cloud Firestore session checkpointing, a modern dark-themed HTML5/JS single-page frontend, structured Cloud Logging, and legacy Streamlit support.
 
 ## Project Intentions
 
@@ -30,12 +30,12 @@ The application currently has three configured players: Eljay, Lry, and Timo. Pl
 From PowerShell / bash in the repository root:
 
 ```bash
-uv venv .venv_tm_tracker
-uv pip install --python .venv_tm_tracker/bin/python -e ".[dev]"
-source .venv_tm_tracker/bin/activate
+uv venv .venv_tm_bingo
+uv pip install --python .venv_tm_bingo/bin/python -e ".[dev]"
+source .venv_tm_bingo/bin/activate
 ```
 
-*(On Windows PowerShell, use `.\.venv_tm_tracker\Scripts\Activate.ps1`)*
+*(On Windows PowerShell, use `.\.venv_tm_bingo\Scripts\Activate.ps1`)*
 
 ### Credentials and Environment Configuration
 
@@ -83,12 +83,12 @@ Build and push the image to Artifact Registry (replace `<PROJECT_ID>` and `<REGI
 
 ```bash
 # Using Cloud Build (no local Docker daemon required):
-gcloud builds submit --tag <REGION>-docker.pkg.dev/<PROJECT_ID>/tm-bingo-repo/tm-tracker:latest
+gcloud builds submit --tag <REGION>-docker.pkg.dev/<PROJECT_ID>/tm-bingo-repo/tm-bingo:latest
 
 # Or using local Docker:
 gcloud auth configure-docker <REGION>-docker.pkg.dev
-docker build -t <REGION>-docker.pkg.dev/<PROJECT_ID>/tm-bingo-repo/tm-tracker:latest .
-docker push <REGION>-docker.pkg.dev/<PROJECT_ID>/tm-bingo-repo/tm-tracker:latest
+docker build -t <REGION>-docker.pkg.dev/<PROJECT_ID>/tm-bingo-repo/tm-bingo:latest .
+docker push <REGION>-docker.pkg.dev/<PROJECT_ID>/tm-bingo-repo/tm-bingo:latest
 ```
 
 ### Cloud Run Deployment Command
@@ -96,15 +96,15 @@ docker push <REGION>-docker.pkg.dev/<PROJECT_ID>/tm-bingo-repo/tm-tracker:latest
 Deploy the pushed image from Artifact Registry:
 
 ```bash
-gcloud run deploy tm-tracker \
-  --image <REGION>-docker.pkg.dev/<PROJECT_ID>/tm-bingo-repo/tm-tracker:latest \
+gcloud run deploy tm-bingo \
+  --image <REGION>-docker.pkg.dev/<PROJECT_ID>/tm-bingo-repo/tm-bingo:latest \
   --platform managed \
   --region <REGION> \
   --allow-unauthenticated \
   --port 8080 \
   --max-instances 1 \
   --timeout 3600 \
-  --service-account "tm-bingo-tracker-runner@<PROJECT_ID>.iam.gserviceaccount.com" \
+  --service-account "tm-bingo-runner@<PROJECT_ID>.iam.gserviceaccount.com" \
   --set-secrets BASIC_AUTH=tm-bingo-basic-auth:latest,APP_PASSWORD_HASH=tm-bingo-password-hash:latest
 ```
 

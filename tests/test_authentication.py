@@ -125,7 +125,7 @@ def test_nadeo_service_token_uses_basic_auth_and_live_audience():
         headers={
             "Content-Type": "application/json",
             "Authorization": "Basic service-credentials",
-            "User-Agent": "Eljay's TM Tracker / Eljay / test@example.com",
+            "User-Agent": "Eljay's TM Bingo / Eljay / test@example.com",
         },
         json={"audience": "NadeoLiveServices"},
         timeout=30,
