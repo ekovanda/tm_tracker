@@ -10,7 +10,6 @@ requires-python = ">=3.13,<3.14"
 dependencies = [
     "fastapi>=0.115.0",
     "google-cloud-firestore>=2.19.0",
-    "streamlit",
     "uvicorn>=0.30.0",
 ]
 
@@ -38,8 +37,6 @@ py-modules = [
     "logger",
     "player",
     "storage",
-    "streamlit_app",
-    "streamlit_bingo_page",
     "tm_lookups",
     "track",
     "utils",

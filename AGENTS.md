@@ -2,7 +2,7 @@
 
 ## Project
 
-- This is a small Python and Streamlit application for tracking TrackMan data.
+- This is a Python application for tracking Trackmania Bingo data with a FastAPI backend and JS frontend.
 - Preserve the existing module boundaries and use the current code as the style reference.
 - Keep changes focused. Do not refactor unrelated code while implementing a feature.
 
@@ -20,7 +20,7 @@
 - Use the project virtual environment for Python execution, development commands, and validation. Create it with `uv venv .venv_tm_bingo`, then activate it in PowerShell with `.\.venv_tm_bingo\Scripts\Activate.ps1` before running commands.
 - Install dependencies with `uv pip install --python .venv_tm_bingo\Scripts\python.exe -e ".[dev]"`.
 - Prefer the existing dependencies and simple standard-library solutions before adding a package.
-- Run project commands from the repository root with the activated virtual environment, for example `uv run --active python -m pytest` or `uv run --active streamlit run streamlit_app.py`.
+- Run project commands from the repository root with the activated virtual environment, for example `uv run --active python -m pytest` or `uv run --active uvicorn api:app --reload`.
 - Never expose, print, commit, or hard-code secrets. Treat `.env` and credentials as private.
 
 ## Validation

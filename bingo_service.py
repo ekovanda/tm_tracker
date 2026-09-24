@@ -1,7 +1,7 @@
 """Session-scoped orchestration for the Trackmania bingo game."""
 
 import time
-from collections.abc import Callable, Iterable, MutableMapping
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from threading import Condition, Lock
@@ -29,7 +29,6 @@ from track import Track
 
 logger = get_logger("bingo_service")
 
-SESSION_KEY = "bingo_session"
 MAX_REQUESTS_PER_SECOND = 2
 REQUEST_DELAY_SECONDS = 0.6
 POLL_CACHE_TTL_SECONDS = 60.0
@@ -44,7 +43,7 @@ ClockFn = Callable[[], float]
 
 
 class ManualTimerStore:
-    """Thread-safe process-wide storage shared by Streamlit viewers."""
+    """Thread-safe process-wide storage for manual player timers."""
 
     def __init__(self) -> None:
         self._states = {player.account_id: ManualTimerState() for player in PLAYERS}
@@ -153,7 +152,7 @@ class RecordEntry:
 
 @dataclass(frozen=True)
 class BingoSession:
-    """All mutable game data retained in Streamlit session state."""
+    """All mutable game data retained for a bingo session."""
 
     campaign_id: str
     tracks: tuple[Track, ...]
@@ -342,7 +341,7 @@ def get_canonical_game_store() -> CanonicalGameStore:
 
 @dataclass(frozen=True)
 class PollSnapshot:
-    """Successful raw leaderboard records shared between Streamlit viewers."""
+    """Successful raw leaderboard records shared across viewers."""
 
     records: tuple[ProcessedRecord, ...]
     completed_at: float
@@ -758,59 +757,3 @@ def reset_manual_timers() -> dict[str, ManualTimerState]:
     """Reset every player's timer for a new game."""
 
     return SHARED_MANUAL_TIMER.reset()
-
-
-# pylint: disable=too-many-arguments,too-many-positional-arguments
-def start_session_in_state(
-    session_state: MutableMapping[str, object],
-    campaign_id: str,
-    jwt_token: str,
-    started_at: datetime,
-    track_loader: TrackLoader | None = None,
-    settings: BingoSettings | None = None,
-) -> BingoSession:
-    """Start a session and retain it under the current Streamlit state."""
-
-    session = start_session(campaign_id, jwt_token, started_at, track_loader, settings)
-    session_state[SESSION_KEY] = session
-    return session
-
-
-def poll_session_in_state(
-    session_state: MutableMapping[str, object],
-    jwt_token: str,
-    now: datetime,
-    record_loader: RecordLoader | None = None,
-    poll_settings: PollSettings | None = None,
-) -> BingoSession:
-    """Poll the session held by Streamlit and store its updated snapshot."""
-
-    session = session_state.get(SESSION_KEY)
-    if not isinstance(session, BingoSession):
-        raise TypeError("No active bingo session exists.")
-    updated = poll_session(
-        session,
-        jwt_token,
-        now,
-        record_loader,
-        poll_settings,
-    )
-    session_state[SESSION_KEY] = updated
-    return updated
-
-
-def stop_session_in_state(session_state: MutableMapping[str, object]) -> BingoSession:
-    """Stop and retain the current session snapshot."""
-
-    session = session_state.get(SESSION_KEY)
-    if not isinstance(session, BingoSession):
-        raise TypeError("No active bingo session exists.")
-    stopped = stop_session(session)
-    session_state[SESSION_KEY] = stopped
-    return stopped
-
-
-def reset_session(session_state: MutableMapping[str, object]) -> None:
-    """Remove the current session so a new campaign can be started."""
-
-    session_state.pop(SESSION_KEY, None)

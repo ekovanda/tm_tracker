@@ -9,7 +9,6 @@ from bingo import BingoSettings
 from bingo_service import (
     MAX_REQUESTS_PER_SECOND,
     REQUEST_DELAY_SECONDS,
-    SESSION_KEY,
     BingoSession,
     CanonicalGameAlreadyStartedError,
     CanonicalGameNotStartedError,
@@ -22,17 +21,13 @@ from bingo_service import (
     get_manual_timers,
     poll_canonical_game,
     poll_session,
-    poll_session_in_state,
     reset_canonical_game,
-    reset_session,
     restart_manual_timer_for_player,
     start_canonical_game,
     start_session,
-    start_session_in_state,
     stop_canonical_game,
     stop_manual_timer_for_player,
     stop_session,
-    stop_session_in_state,
 )
 from live_services import LiveServiceError
 from player import PLAYERS
@@ -510,32 +505,6 @@ def test_terminal_sessions_are_not_polled_again():
         is stopped
     )
     assert stop_session(stopped) is stopped
-
-
-def test_streamlit_state_start_poll_stop_and_reset():
-    state = {}
-    started = start_session_in_state(state, "campaign", "jwt", START, make_loader())
-    assert state[SESSION_KEY] is started
-
-    polled = poll_session_in_state(
-        state,
-        "jwt",
-        START,
-        make_record_loader(),
-        PollSettings(sleep_fn=no_sleep),
-    )
-    assert state[SESSION_KEY] is polled
-    stopped = stop_session_in_state(state)
-    assert stopped.state.status == "stopped"
-    reset_session(state)
-    assert SESSION_KEY not in state
-
-
-def test_state_helpers_require_a_session():
-    with pytest.raises(TypeError, match="No active"):
-        poll_session_in_state({}, "jwt", START)
-    with pytest.raises(TypeError, match="No active"):
-        stop_session_in_state({})
 
 
 def test_manual_timer_store_is_shared_and_expires_from_reads():

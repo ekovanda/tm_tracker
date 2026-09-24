@@ -8,7 +8,6 @@ import secrets
 from datetime import UTC, datetime, timedelta
 
 import requests
-import streamlit as st
 
 from config import UBISOFT_APP_ID
 from logger import get_logger
@@ -17,22 +16,9 @@ logger = get_logger("authentication")
 
 
 def _get_secret(name: str, default: str | None = None) -> str | None:
-    """Read an app setting from environment variables or Streamlit-managed secrets."""
+    """Read an app setting from environment variables."""
 
-    env_val = os.environ.get(name)
-    if env_val is not None:
-        return env_val
-
-    try:
-        val = st.secrets.get(name)
-        if val is not None:
-            return str(val)
-    except (FileNotFoundError, RuntimeError, AttributeError, KeyError):
-        logger.debug(
-            "Secret '%s' not present in st.secrets; falling back to default.", name
-        )
-
-    return default
+    return os.environ.get(name, default)
 
 
 BASIC_AUTH = _get_secret("BASIC_AUTH")
@@ -143,7 +129,7 @@ def verify_app_password(password: str, encoded_hash: str | None = None) -> bool:
     if not stored_hash:
         raise PasswordConfigurationError(
             "Missing APP_PASSWORD_HASH. Set a PBKDF2 password hash in "
-            ".streamlit/secrets.toml or APP_PASSWORD_HASH environment variable."
+            "the APP_PASSWORD_HASH environment variable."
         )
 
     try:

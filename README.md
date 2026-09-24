@@ -1,6 +1,6 @@
 # Trackmania Bingo
 
-Trackmania Bingo is a live tracking application for running three-player Trackmania Bingo challenge sessions against official Nadeo campaigns. It features a decoupled FastAPI backend with persistent Google Cloud Firestore session checkpointing, a modern dark-themed HTML5/JS single-page frontend, structured Cloud Logging, and legacy Streamlit support.
+Trackmania Bingo is a live tracking application for running three-player Trackmania Bingo challenge sessions against official Nadeo campaigns. It features a decoupled FastAPI backend with persistent Google Cloud Firestore session checkpointing, a modern dark-themed HTML5/JS single-page frontend, and structured Cloud Logging.
 
 ## Project Intentions
 
@@ -51,27 +51,15 @@ Optional environment variables:
 - `GCP_PROJECT_ID`: Target GCP project for Cloud Logging and Firestore persistence.
 - `FIRESTORE_DATABASE_ID`: Optional Firestore database ID (defaults to `(default)`).
 
-For Streamlit execution, `.streamlit/secrets.toml` provides the same keys.
-
 ## Running Locally
 
-### FastAPI Backend & SPA Frontend (Recommended)
-
-Run the decoupled FastAPI server:
+Run the FastAPI server:
 
 ```bash
 uv run --active uvicorn api:app --reload --port 8080
 ```
 
 Open `http://localhost:8080` in your browser. The single-page application serves the complete interactive console with password unlock gate, campaign settings preview, board shuffle, 4x4 Bingo grid, player timer cards, and live PB record feed.
-
-### Streamlit Mode (Legacy)
-
-Run the Streamlit application:
-
-```bash
-uv run --active streamlit run streamlit_app.py
-```
 
 ## Deployment to Google Cloud Run
 
