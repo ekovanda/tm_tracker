@@ -684,6 +684,17 @@ def test_setup_configuration_is_shared_between_viewers():
     assert second_st.session_state[bingo_page_module.SETUP_TIMER_DURATION_KEY] == 7
 
 
+def test_setup_grace_period_preserved_across_rerun():
+    campaigns = [SimpleNamespace(campaign_id="campaign", name="Summer")]
+    fake_st = FakeStreamlit()
+    fake_st.session_state[bingo_page_module.SETUP_GRACE_PERIOD_KEY] = 15
+    with patch.object(bingo_page_module, "st", fake_st):
+        # pylint: disable=protected-access
+        bingo_page_module._render_session_settings(campaigns)
+
+    assert fake_st.session_state[bingo_page_module.SETUP_GRACE_PERIOD_KEY] == 15
+
+
 def test_stop_and_reset_controls_delegate_to_service():
     track = Track("Track 1", "uid-1", 1)
     session = BingoSession(

@@ -788,6 +788,7 @@
         const el = document.getElementById(id);
         if (el) {
           el.addEventListener('change', () => this.handleConfigChange());
+          el.addEventListener('blur', () => this.handleConfigChange());
         }
       }
 
@@ -840,18 +841,28 @@
             manual_timer_duration_seconds: timerInput ? Math.round(parseInt(timerInput.value, 10) * 60) : 600,
           };
 
+          const originalText = startBtn.textContent;
           try {
             startBtn.disabled = true;
-            await apiRequest('/api/game/start', {
+            startBtn.textContent = 'Starting & loading times...';
+            const startedGame = await apiRequest('/api/game/start', {
               method: 'POST',
               body: JSON.stringify(payload),
             });
             this.showNotification('Bingo game started!', 'success');
+            if (startedGame) {
+              this.gameState = startedGame;
+              if (startedGame.session) {
+                this.timerEngine.setSession(startedGame.session);
+              }
+              this.renderGameState();
+            }
             await this.syncState();
           } catch (err) {
             this.showNotification(`Failed to start game: ${err.message}`, 'danger');
           } finally {
             startBtn.disabled = false;
+            startBtn.textContent = originalText;
           }
         });
       }

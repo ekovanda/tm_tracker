@@ -584,6 +584,19 @@ def _serialize_canonical_game(
             "campaign_id": session.campaign_id,
             "started_at": state.started_at.isoformat(),
             "status": state.status,
+            "settings": {
+                "game_duration_seconds": state.settings.game_duration.total_seconds(),
+                "grace_period_seconds": state.settings.grace_period.total_seconds(),
+                "manual_timer_duration_seconds": (
+                    state.settings.manual_timer_duration.total_seconds()
+                ),
+                "board_seed": state.settings.board_seed,
+            },
+            "game_duration_seconds": state.settings.game_duration.total_seconds(),
+            "grace_period_seconds": state.settings.grace_period.total_seconds(),
+            "manual_timer_duration_seconds": (
+                state.settings.manual_timer_duration.total_seconds()
+            ),
             "winner": _serialize_player(state.winner),
             "timer_owner": _serialize_player(state.timer_owner),
             "timer_started_at": (
@@ -775,7 +788,21 @@ def start_game(payload: StartGameRequest) -> dict[str, Any]:
         ) from error
 
     now = datetime.now(UTC)
-    set_last_poll_time(now)
+    try:
+        updated = poll_canonical_game(token, now)
+        set_last_poll_time(now)
+    except (
+        UbisoftAuthenticationError,
+        live_services.LiveServiceError,
+        RuntimeError,
+        OSError,
+    ) as error:
+        logger.warning(
+            "Initial leaderboard poll failed during game start; background poller will retry",
+            extra={"error": str(error)},
+        )
+        set_last_poll_time(None)
+
     return _serialize_canonical_game(updated, now)
 
 

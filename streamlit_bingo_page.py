@@ -522,16 +522,20 @@ def _render_session_settings(
         ),
         0,
     )
-    st.session_state[SETUP_CAMPAIGN_KEY] = campaigns[campaign_index]
-    st.session_state[SETUP_GAME_DURATION_KEY] = int(
-        pending.settings.game_duration.total_seconds() / 3600
-    )
-    st.session_state[SETUP_GRACE_PERIOD_KEY] = int(
-        pending.settings.grace_period.total_seconds() / 60
-    )
-    st.session_state[SETUP_TIMER_DURATION_KEY] = int(
-        pending.settings.manual_timer_duration.total_seconds() / 60
-    )
+    if SETUP_CAMPAIGN_KEY not in st.session_state:
+        st.session_state[SETUP_CAMPAIGN_KEY] = campaigns[campaign_index]
+    if SETUP_GAME_DURATION_KEY not in st.session_state:
+        st.session_state[SETUP_GAME_DURATION_KEY] = int(
+            pending.settings.game_duration.total_seconds() / 3600
+        )
+    if SETUP_GRACE_PERIOD_KEY not in st.session_state:
+        st.session_state[SETUP_GRACE_PERIOD_KEY] = int(
+            pending.settings.grace_period.total_seconds() / 60
+        )
+    if SETUP_TIMER_DURATION_KEY not in st.session_state:
+        st.session_state[SETUP_TIMER_DURATION_KEY] = int(
+            pending.settings.manual_timer_duration.total_seconds() / 60
+        )
     campaign = st.selectbox(
         "Official campaign",
         campaigns,

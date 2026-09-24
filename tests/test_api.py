@@ -282,6 +282,10 @@ def test_game_full_lifecycle():
             assert "series" in cell_0["track"]
             assert cell_0["track"]["series"] in (0, 1, 2, 3)
             assert "winning_time" in cell_0
+            assert "settings" in game_data["session"]
+            assert game_data["session"]["settings"]["grace_period_seconds"] == 900.0
+            assert game_data["session"]["grace_period_seconds"] == 900.0
+            assert game_data["session"]["game_duration_seconds"] == 7200.0
             assert "medal_counts" in game_data["session"]
             assert "rank_points" in game_data["session"]
             for player in PLAYERS:
@@ -670,3 +674,95 @@ def test_lifespan_starts_and_cancels_background_poller():
             await asyncio.sleep(0.01)
 
     asyncio.run(run_lifespan())
+
+
+def test_start_game_with_custom_grace_period():
+    fake_tracks = [
+        Track(str(num), f"Track {num}", number=num)
+        for num in (1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 16, 17, 18, 19)
+    ]
+
+    client.post("/api/game/reset")
+    set_cached_service_token({"accessToken": "fake_token"})
+    try:
+        with patch(
+            "live_services.get_playable_campaign_tracks", return_value=fake_tracks
+        ):
+            resp = client.post(
+                "/api/game/start",
+                json={
+                    "campaign_id": "summer_2026",
+                    "grace_period_minutes": 15,
+                    "game_duration_minutes": 120,
+                },
+            )
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["session"]["settings"]["grace_period_seconds"] == 900.0
+            assert data["session"]["grace_period_seconds"] == 900.0
+            assert data["session"]["settings"]["game_duration_seconds"] == 7200.0
+            assert data["session"]["game_duration_seconds"] == 7200.0
+    finally:
+        set_cached_service_token(None)
+        client.post("/api/game/reset")
+
+
+def test_start_game_initial_poll_success():
+    fake_tracks = [
+        Track(str(num), f"Track {num}", number=num)
+        for num in (1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 16, 17, 18, 19)
+    ]
+
+    client.post("/api/game/reset")
+    set_cached_service_token({"accessToken": "fake_token"})
+    try:
+        with (
+            patch(
+                "live_services.get_playable_campaign_tracks", return_value=fake_tracks
+            ),
+            patch("api.poll_canonical_game") as mock_poll,
+        ):
+            mock_poll.side_effect = lambda token, now: SHARED_CANONICAL_GAME.get()
+            resp = client.post(
+                "/api/game/start",
+                json={"campaign_id": "summer_2026"},
+            )
+            assert resp.status_code == 200
+            mock_poll.assert_called_once()
+            assert get_last_poll_time() is not None
+    finally:
+        set_cached_service_token(None)
+        client.post("/api/game/reset")
+
+
+def test_start_game_initial_poll_failure_resilience():
+    fake_tracks = [
+        Track(str(num), f"Track {num}", number=num)
+        for num in (1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 16, 17, 18, 19)
+    ]
+
+    client.post("/api/game/reset")
+    set_cached_service_token({"accessToken": "fake_token"})
+    try:
+        with (
+            patch(
+                "live_services.get_playable_campaign_tracks", return_value=fake_tracks
+            ),
+            patch(
+                "api.poll_canonical_game",
+                side_effect=live_services.LiveServiceError(
+                    "API down", category="server"
+                ),
+            ),
+        ):
+            resp = client.post(
+                "/api/game/start",
+                json={"campaign_id": "summer_2026"},
+            )
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["status"] == "active"
+            assert get_last_poll_time() is None
+    finally:
+        set_cached_service_token(None)
+        client.post("/api/game/reset")

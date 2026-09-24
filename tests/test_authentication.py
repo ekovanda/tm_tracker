@@ -308,6 +308,7 @@ def test_verify_app_password_with_env_hash(monkeypatch):
     digest_b64 = base64.urlsafe_b64encode(digest).decode("ascii")
     hash_str = f"pbkdf2_sha256$100000${salt_b64}${digest_b64}"
 
+    monkeypatch.setattr(authentication, "APP_PASSWORD_HASH", None)
     monkeypatch.setenv("APP_PASSWORD_HASH", hash_str)
     assert authentication.verify_app_password("my_password") is True
     assert authentication.verify_app_password("wrong_password") is False
@@ -315,7 +316,10 @@ def test_verify_app_password_with_env_hash(monkeypatch):
 
 def test_verify_app_password_configuration_errors(monkeypatch):
     monkeypatch.delenv("APP_PASSWORD_HASH", raising=False)
-    with patch.object(authentication, "APP_PASSWORD_HASH", None):
+    with (
+        patch.object(authentication, "APP_PASSWORD_HASH", None),
+        patch("authentication._get_secret", return_value=None),
+    ):
         with pytest.raises(
             authentication.PasswordConfigurationError, match="Missing APP_PASSWORD_HASH"
         ):

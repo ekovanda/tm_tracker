@@ -17,7 +17,11 @@ logger = get_logger("authentication")
 
 
 def _get_secret(name: str, default: str | None = None) -> str | None:
-    """Read an app setting from Streamlit-managed secrets or environment variables."""
+    """Read an app setting from environment variables or Streamlit-managed secrets."""
+
+    env_val = os.environ.get(name)
+    if env_val is not None:
+        return env_val
 
     try:
         val = st.secrets.get(name)
@@ -25,12 +29,8 @@ def _get_secret(name: str, default: str | None = None) -> str | None:
             return str(val)
     except (FileNotFoundError, RuntimeError, AttributeError, KeyError):
         logger.debug(
-            "Secret '%s' not present in st.secrets; falling back to environment.", name
+            "Secret '%s' not present in st.secrets; falling back to default.", name
         )
-
-    env_val = os.environ.get(name)
-    if env_val is not None:
-        return env_val
 
     return default
 
@@ -175,9 +175,9 @@ def verify_app_password(password: str, encoded_hash: str | None = None) -> bool:
 def get_user_agent() -> str:
     """Build the identifying User-Agent shared by all service requests."""
 
-    contact = _get_secret("EMAIL") or EMAIL or "contact configured through EMAIL"
-    project_name = _get_secret("PROJECT_NAME") or PROJECT_NAME
-    maintainer = _get_secret("MAINTAINER_HANDLE") or MAINTAINER_HANDLE
+    contact = EMAIL or _get_secret("EMAIL") or "contact configured through EMAIL"
+    project_name = PROJECT_NAME or _get_secret("PROJECT_NAME")
+    maintainer = MAINTAINER_HANDLE or _get_secret("MAINTAINER_HANDLE")
     return f"{project_name} / {maintainer} / {contact}"
 
 
