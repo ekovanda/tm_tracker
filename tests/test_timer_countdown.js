@@ -88,7 +88,7 @@ assert.strictEqual(activeResult3.progressFraction, 0);
 assert.strictEqual(activeResult3.formatted, '00:00');
 console.log('✓ calculateTimerState (active -> expired) passed');
 
-// 4. Test calculateTimerState - Stopped State
+// 4. Test calculateTimerState - Stopped State (resets to ready)
 const stoppedTimer = {
   account_id: 'player-1',
   status: 'stopped',
@@ -97,11 +97,11 @@ const stoppedTimer = {
   remaining_seconds: 245.5,
 };
 const stoppedResult = calculateTimerState(stoppedTimer);
-assert.strictEqual(stoppedResult.status, 'stopped');
-assert.strictEqual(stoppedResult.remainingSeconds, 245.5);
-assert.strictEqual(stoppedResult.formatted, '04:05');
-assert(Math.abs(stoppedResult.progressFraction - 245.5 / 600) < 0.001);
-console.log('✓ calculateTimerState (stopped) passed');
+assert.strictEqual(stoppedResult.status, 'ready');
+assert.strictEqual(stoppedResult.remainingSeconds, 600);
+assert.strictEqual(stoppedResult.formatted, '10:00');
+assert.strictEqual(stoppedResult.progressFraction, 1);
+console.log('✓ calculateTimerState (stopped -> ready) passed');
 
 // 5. Test calculateTimerState - Expired State
 const expiredTimer = {
@@ -147,6 +147,21 @@ assert.strictEqual(Math.round(sessionResult2.gameRemaining), 18000 - 45 * 60);
 assert.strictEqual(sessionResult2.formattedGame, '04:15:00');
 console.log('✓ calculateSessionTime (past grace) passed');
 
+// 6b. Test calculateSessionTime with zero grace period
+const zeroGraceSession = {
+  started_at: new Date(sessionStartTime).toISOString(),
+  settings: {
+    game_duration_seconds: 18000,
+    grace_period_seconds: 0,
+  },
+};
+const sessionResultZero = calculateSessionTime(zeroGraceSession, at10Minutes);
+assert.strictEqual(sessionResultZero.graceActive, false);
+assert.strictEqual(sessionResultZero.graceRemaining, 0);
+assert.strictEqual(sessionResultZero.graceDuration, 0);
+assert.strictEqual(sessionResultZero.formattedGrace, '00:00');
+console.log('✓ calculateSessionTime (zero grace) passed');
+
 // 7. Test TimerEngine basic operations in headless environment
 const engine = new TimerEngine();
 engine.setTimers([
@@ -160,5 +175,31 @@ engine.onTick(() => { tickFired = true; });
 engine.render();
 assert.strictEqual(tickFired, true);
 console.log('✓ TimerEngine tests passed');
+
+// 8. Test renderBoardPreview in headless DOM mock
+const mockGrid = { innerHTML: '' };
+global.document = {
+  getElementById: (id) => (id === 'setup-board-preview' ? mockGrid : null),
+  querySelectorAll: () => [],
+};
+const app = new AppController(new TimerEngine());
+const sampleBoard = [
+  [
+    { track: { track_number: 1, series: 0 } },
+    { track: { track_number: 6, series: 1 } },
+    { track: { track_number: 11, series: 2 } },
+    { track: { track_number: 16, series: 3 } },
+  ],
+];
+app.renderBoardPreview(sampleBoard);
+assert(mockGrid.innerHTML.includes('01'));
+assert(mockGrid.innerHTML.includes('⚪'));
+assert(mockGrid.innerHTML.includes('06'));
+assert(mockGrid.innerHTML.includes('🟢'));
+assert(mockGrid.innerHTML.includes('11'));
+assert(mockGrid.innerHTML.includes('🔵'));
+assert(mockGrid.innerHTML.includes('16'));
+assert(mockGrid.innerHTML.includes('🔴'));
+console.log('✓ renderBoardPreview passed');
 
 console.log('All client-side timer countdown tests passed successfully!');

@@ -136,21 +136,22 @@
     const startTime = new Date(session.started_at).getTime();
     const elapsedSeconds = Math.max(0, (currentNow - startTime) / 1000);
 
-    const gameDuration = (session.settings && session.settings.game_duration_seconds)
-      || session.game_duration_seconds
-      || 18000;
+    const gameDuration = (session.settings && session.settings.game_duration_seconds != null)
+      ? Number(session.settings.game_duration_seconds)
+      : (session.game_duration_seconds != null ? Number(session.game_duration_seconds) : 18000);
 
-    const graceDuration = (session.settings && session.settings.grace_period_seconds)
-      || session.grace_period_seconds
-      || 1800;
+    const graceDuration = (session.settings && session.settings.grace_period_seconds != null)
+      ? Number(session.settings.grace_period_seconds)
+      : (session.grace_period_seconds != null ? Number(session.grace_period_seconds) : 1800);
 
     const gameRemaining = Math.max(0, gameDuration - elapsedSeconds);
     const graceRemaining = Math.max(0, graceDuration - elapsedSeconds);
-    const graceActive = graceRemaining > 0;
+    const graceActive = graceDuration > 0 && graceRemaining > 0;
 
     return {
       gameRemaining: gameRemaining,
       formattedGame: formatTime(gameRemaining),
+      graceDuration: graceDuration,
       graceActive: graceActive,
       graceRemaining: graceRemaining,
       formattedGrace: formatTime(graceRemaining),
@@ -281,6 +282,9 @@
         if (computed.graceActive) {
           graceBadge.className = 'badge badge-warning';
           graceBadge.textContent = `Active (${computed.formattedGrace})`;
+        } else if (computed.graceDuration === 0) {
+          graceBadge.className = 'badge badge-subtle';
+          graceBadge.textContent = 'None';
         } else {
           graceBadge.className = 'badge badge-subtle';
           graceBadge.textContent = 'Ended';
@@ -532,6 +536,7 @@
         }
 
         if (pending && pending.board) {
+          this.renderBoardPreview(pending.board);
           this.renderBoard(pending.board);
         }
       } else {
@@ -559,6 +564,33 @@
           this.renderRecords(session.records);
         }
       }
+    }
+
+    renderBoardPreview(board) {
+      if (!Array.isArray(board) || board.length === 0) return;
+      const previewGrid = document.getElementById('setup-board-preview');
+      if (!previewGrid) return;
+
+      const seriesEmojis = ['⚪', '🟢', '🔵', '🔴'];
+      const seriesNames = ['White', 'Green', 'Blue', 'Red'];
+
+      let html = '';
+      for (let r = 0; r < board.length; r++) {
+        for (let c = 0; c < board[r].length; c++) {
+          const cell = board[r][c];
+          const track = cell ? cell.track : null;
+          const trackNum = track && track.track_number != null ? String(track.track_number).padStart(2, '0') : '--';
+          const series = track && track.series != null ? track.series : 0;
+          const emoji = seriesEmojis[series] || '⚪';
+          const name = seriesNames[series] || '';
+
+          html += `<div class="preview-cell series-${series}" title="Track ${trackNum} (${name})">` +
+            `<span class="preview-track-num">${trackNum}</span>` +
+            `<span class="preview-track-emoji emoji" aria-label="${name} track">${emoji}</span>` +
+          `</div>`;
+        }
+      }
+      previewGrid.innerHTML = html;
     }
 
     renderBoard(board) {
@@ -592,11 +624,13 @@
             trackNumEl.textContent = String(cellData.track.track_number).padStart(2, '0');
           }
 
-          const seriesPill = cellEl.querySelector('.cell-series-pill');
-          if (seriesPill && cellData.track) {
+          const seriesEmoji = cellEl.querySelector('.cell-series-emoji');
+          if (seriesEmoji && cellData.track) {
+            const seriesEmojis = ['⚪', '🟢', '🔵', '🔴'];
             const seriesNames = ['White', 'Green', 'Blue', 'Red'];
-            seriesPill.textContent = seriesNames[series] || '';
-            seriesPill.className = `cell-series-pill series-pill-${series}`;
+            seriesEmoji.textContent = seriesEmojis[series] || '⚪';
+            seriesEmoji.title = `${seriesNames[series] || ''} track`;
+            seriesEmoji.setAttribute('aria-label', `${seriesNames[series] || ''} track`);
           }
 
           // 2. Owner & Record Time
@@ -852,11 +886,12 @@
             return;
           }
 
+          const graceVal = (graceInput && graceInput.value.trim() !== '') ? parseInt(graceInput.value, 10) : NaN;
           const payload = {
             campaign_id: campaignId,
             board_seed: seedInput ? parseInt(seedInput.value, 10) : 12345,
             game_duration_seconds: gameDurationInput ? Math.round(parseFloat(gameDurationInput.value) * 3600) : 18000,
-            grace_period_seconds: graceInput ? Math.round(parseInt(graceInput.value, 10) * 60) : 1800,
+            grace_period_seconds: (!isNaN(graceVal) && graceVal >= 0) ? Math.round(graceVal * 60) : 1800,
             manual_timer_duration_seconds: timerInput ? Math.round(parseInt(timerInput.value, 10) * 60) : 600,
           };
 

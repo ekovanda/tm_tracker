@@ -126,6 +126,35 @@
           </div>
         </div>
 
+        <!-- Board Arrangement Preview Section -->
+        <div class="setup-preview-section">
+          <div class="preview-header">
+            <h3 class="preview-title">Board Arrangement Preview</h3>
+            <span class="preview-hint">4x4 series-balanced layout (1 track per series in each row &amp; column)</span>
+          </div>
+          <div id="setup-board-preview" class="setup-preview-grid" role="grid" aria-label="Setup Board Preview">
+            <div class="preview-cell series-0" title="Track 01 (White)"><span class="preview-track-num">01</span><span class="preview-track-emoji emoji" aria-label="White track">⚪</span></div>
+            <div class="preview-cell series-1" title="Track 06 (Green)"><span class="preview-track-num">06</span><span class="preview-track-emoji emoji" aria-label="Green track">🟢</span></div>
+            <div class="preview-cell series-2" title="Track 11 (Blue)"><span class="preview-track-num">11</span><span class="preview-track-emoji emoji" aria-label="Blue track">🔵</span></div>
+            <div class="preview-cell series-3" title="Track 16 (Red)"><span class="preview-track-num">16</span><span class="preview-track-emoji emoji" aria-label="Red track">🔴</span></div>
+
+            <div class="preview-cell series-3" title="Track 17 (Red)"><span class="preview-track-num">17</span><span class="preview-track-emoji emoji" aria-label="Red track">🔴</span></div>
+            <div class="preview-cell series-2" title="Track 12 (Blue)"><span class="preview-track-num">12</span><span class="preview-track-emoji emoji" aria-label="Blue track">🔵</span></div>
+            <div class="preview-cell series-1" title="Track 07 (Green)"><span class="preview-track-num">07</span><span class="preview-track-emoji emoji" aria-label="Green track">🟢</span></div>
+            <div class="preview-cell series-0" title="Track 02 (White)"><span class="preview-track-num">02</span><span class="preview-track-emoji emoji" aria-label="White track">⚪</span></div>
+
+            <div class="preview-cell series-1" title="Track 08 (Green)"><span class="preview-track-num">08</span><span class="preview-track-emoji emoji" aria-label="Green track">🟢</span></div>
+            <div class="preview-cell series-0" title="Track 03 (White)"><span class="preview-track-num">03</span><span class="preview-track-emoji emoji" aria-label="White track">⚪</span></div>
+            <div class="preview-cell series-3" title="Track 18 (Red)"><span class="preview-track-num">18</span><span class="preview-track-emoji emoji" aria-label="Red track">🔴</span></div>
+            <div class="preview-cell series-2" title="Track 13 (Blue)"><span class="preview-track-num">13</span><span class="preview-track-emoji emoji" aria-label="Blue track">🔵</span></div>
+
+            <div class="preview-cell series-2" title="Track 14 (Blue)"><span class="preview-track-num">14</span><span class="preview-track-emoji emoji" aria-label="Blue track">🔵</span></div>
+            <div class="preview-cell series-3" title="Track 19 (Red)"><span class="preview-track-num">19</span><span class="preview-track-emoji emoji" aria-label="Red track">🔴</span></div>
+            <div class="preview-cell series-0" title="Track 04 (White)"><span class="preview-track-num">04</span><span class="preview-track-emoji emoji" aria-label="White track">⚪</span></div>
+            <div class="preview-cell series-1" title="Track 09 (Green)"><span class="preview-track-num">09</span><span class="preview-track-emoji emoji" aria-label="Green track">🟢</span></div>
+          </div>
+        </div>
+
         <div class="setup-actions">
           <button type="button" id="btn-start-game" class="btn btn-success btn-large">
             <span class="btn-icon emoji">🚀</span>
@@ -174,24 +203,10 @@
       <main class="challenge-layout">
       <!-- Left Column: Bingo Board -->
       <section class="board-column">
-        <div class="column-header">
-          <div>
-            <h2 class="section-title">4x4 Bingo Board</h2>
-            <p class="section-subtitle">Hold a completed line for 10 minutes to claim victory.</p>
-          </div>
-          <!-- Series Legend -->
-          <div class="series-legend">
-            <span class="legend-chip series-0">1-4 White</span>
-            <span class="legend-chip series-1">6-9 Green</span>
-            <span class="legend-chip series-2">11-14 Blue</span>
-            <span class="legend-chip series-3">16-19 Red</span>
-          </div>
-        </div>
-
         <!-- 4x4 Bingo Grid -->
         <div id="bingo-board" class="bingo-grid" role="grid" aria-label="Trackmania Bingo Board">
           <div class="track-cell series-0 owner-unclaimed" data-cell-index="0" data-track-number="1">
-            <div class="cell-top"><span class="cell-track-num">01</span><span class="cell-series-pill series-pill-0">White</span></div>
+            <div class="cell-top"><span class="cell-track-num">01</span><span class="cell-series-emoji emoji" title="White track">⚪</span></div>
             <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
             <div class="cell-deltas">
               <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
@@ -199,7 +214,7 @@
             </div>
           </div>
           <div class="track-cell series-1 owner-unclaimed" data-cell-index="1" data-track-number="6">
-            <div class="cell-top"><span class="cell-track-num">06</span><span class="cell-series-pill series-pill-1">Green</span></div>
+            <div class="cell-top"><span class="cell-track-num">06</span><span class="cell-series-emoji emoji" title="Green track">🟢</span></div>
             <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
             <div class="cell-deltas">
               <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
@@ -207,7 +222,7 @@
             </div>
           </div>
           <div class="track-cell series-2 owner-unclaimed" data-cell-index="2" data-track-number="11">
-            <div class="cell-top"><span class="cell-track-num">11</span><span class="cell-series-pill series-pill-2">Blue</span></div>
+            <div class="cell-top"><span class="cell-track-num">11</span><span class="cell-series-emoji emoji" title="Blue track">🔵</span></div>
             <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
             <div class="cell-deltas">
               <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
@@ -215,7 +230,7 @@
             </div>
           </div>
           <div class="track-cell series-3 owner-unclaimed" data-cell-index="3" data-track-number="16">
-            <div class="cell-top"><span class="cell-track-num">16</span><span class="cell-series-pill series-pill-3">Red</span></div>
+            <div class="cell-top"><span class="cell-track-num">16</span><span class="cell-series-emoji emoji" title="Red track">🔴</span></div>
             <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
             <div class="cell-deltas">
               <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
@@ -224,7 +239,7 @@
           </div>
 
           <div class="track-cell series-3 owner-unclaimed" data-cell-index="4" data-track-number="17">
-            <div class="cell-top"><span class="cell-track-num">17</span><span class="cell-series-pill series-pill-3">Red</span></div>
+            <div class="cell-top"><span class="cell-track-num">17</span><span class="cell-series-emoji emoji" title="Red track">🔴</span></div>
             <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
             <div class="cell-deltas">
               <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
@@ -232,7 +247,7 @@
             </div>
           </div>
           <div class="track-cell series-2 owner-unclaimed" data-cell-index="5" data-track-number="12">
-            <div class="cell-top"><span class="cell-track-num">12</span><span class="cell-series-pill series-pill-2">Blue</span></div>
+            <div class="cell-top"><span class="cell-track-num">12</span><span class="cell-series-emoji emoji" title="Blue track">🔵</span></div>
             <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
             <div class="cell-deltas">
               <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
@@ -240,7 +255,7 @@
             </div>
           </div>
           <div class="track-cell series-1 owner-unclaimed" data-cell-index="6" data-track-number="7">
-            <div class="cell-top"><span class="cell-track-num">07</span><span class="cell-series-pill series-pill-1">Green</span></div>
+            <div class="cell-top"><span class="cell-track-num">07</span><span class="cell-series-emoji emoji" title="Green track">🟢</span></div>
             <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
             <div class="cell-deltas">
               <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
@@ -248,7 +263,7 @@
             </div>
           </div>
           <div class="track-cell series-0 owner-unclaimed" data-cell-index="7" data-track-number="2">
-            <div class="cell-top"><span class="cell-track-num">02</span><span class="cell-series-pill series-pill-0">White</span></div>
+            <div class="cell-top"><span class="cell-track-num">02</span><span class="cell-series-emoji emoji" title="White track">⚪</span></div>
             <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
             <div class="cell-deltas">
               <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
@@ -257,7 +272,7 @@
           </div>
 
           <div class="track-cell series-1 owner-unclaimed" data-cell-index="8" data-track-number="8">
-            <div class="cell-top"><span class="cell-track-num">08</span><span class="cell-series-pill series-pill-1">Green</span></div>
+            <div class="cell-top"><span class="cell-track-num">08</span><span class="cell-series-emoji emoji" title="Green track">🟢</span></div>
             <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
             <div class="cell-deltas">
               <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
@@ -265,7 +280,7 @@
             </div>
           </div>
           <div class="track-cell series-0 owner-unclaimed" data-cell-index="9" data-track-number="3">
-            <div class="cell-top"><span class="cell-track-num">03</span><span class="cell-series-pill series-pill-0">White</span></div>
+            <div class="cell-top"><span class="cell-track-num">03</span><span class="cell-series-emoji emoji" title="White track">⚪</span></div>
             <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
             <div class="cell-deltas">
               <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
@@ -273,7 +288,7 @@
             </div>
           </div>
           <div class="track-cell series-3 owner-unclaimed" data-cell-index="10" data-track-number="18">
-            <div class="cell-top"><span class="cell-track-num">18</span><span class="cell-series-pill series-pill-3">Red</span></div>
+            <div class="cell-top"><span class="cell-track-num">18</span><span class="cell-series-emoji emoji" title="Red track">🔴</span></div>
             <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
             <div class="cell-deltas">
               <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
@@ -281,7 +296,7 @@
             </div>
           </div>
           <div class="track-cell series-2 owner-unclaimed" data-cell-index="11" data-track-number="13">
-            <div class="cell-top"><span class="cell-track-num">13</span><span class="cell-series-pill series-pill-2">Blue</span></div>
+            <div class="cell-top"><span class="cell-track-num">13</span><span class="cell-series-emoji emoji" title="Blue track">🔵</span></div>
             <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
             <div class="cell-deltas">
               <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
@@ -290,7 +305,7 @@
           </div>
 
           <div class="track-cell series-2 owner-unclaimed" data-cell-index="12" data-track-number="14">
-            <div class="cell-top"><span class="cell-track-num">14</span><span class="cell-series-pill series-pill-2">Blue</span></div>
+            <div class="cell-top"><span class="cell-track-num">14</span><span class="cell-series-emoji emoji" title="Blue track">🔵</span></div>
             <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
             <div class="cell-deltas">
               <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
@@ -298,7 +313,7 @@
             </div>
           </div>
           <div class="track-cell series-3 owner-unclaimed" data-cell-index="13" data-track-number="19">
-            <div class="cell-top"><span class="cell-track-num">19</span><span class="cell-series-pill series-pill-3">Red</span></div>
+            <div class="cell-top"><span class="cell-track-num">19</span><span class="cell-series-emoji emoji" title="Red track">🔴</span></div>
             <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
             <div class="cell-deltas">
               <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
@@ -306,7 +321,7 @@
             </div>
           </div>
           <div class="track-cell series-0 owner-unclaimed" data-cell-index="14" data-track-number="4">
-            <div class="cell-top"><span class="cell-track-num">04</span><span class="cell-series-pill series-pill-0">White</span></div>
+            <div class="cell-top"><span class="cell-track-num">04</span><span class="cell-series-emoji emoji" title="White track">⚪</span></div>
             <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
             <div class="cell-deltas">
               <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
@@ -314,7 +329,7 @@
             </div>
           </div>
           <div class="track-cell series-1 owner-unclaimed" data-cell-index="15" data-track-number="9">
-            <div class="cell-top"><span class="cell-track-num">09</span><span class="cell-series-pill series-pill-1">Green</span></div>
+            <div class="cell-top"><span class="cell-track-num">09</span><span class="cell-series-emoji emoji" title="Green track">🟢</span></div>
             <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
             <div class="cell-deltas">
               <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
