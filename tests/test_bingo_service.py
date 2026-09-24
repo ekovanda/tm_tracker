@@ -533,8 +533,8 @@ def test_manual_timer_store_and_shared_helpers_are_independent_per_player():
     assert store.get(PLAYERS[0], START).status == "active"
     assert store.get(PLAYERS[1], START).status == "ready"
     assert restart_manual_timer_for_player(PLAYERS[1], START).status == "active"
-    assert stop_manual_timer_for_player(PLAYERS[1]).status == "stopped"
+    assert stop_manual_timer_for_player(PLAYERS[1]).status == "ready"
     timers = get_manual_timers(START)
     assert timers[PLAYERS[0].account_id].status == "ready"
-    assert timers[PLAYERS[1].account_id].status == "stopped"
+    assert timers[PLAYERS[1].account_id].status == "ready"
     assert timers[PLAYERS[2].account_id].status == "ready"

@@ -59,7 +59,7 @@ Run the FastAPI server:
 uv run --active uvicorn api:app --reload --port 8080
 ```
 
-Open `http://localhost:8080` in your browser. The single-page application serves the complete interactive console with password unlock gate, campaign settings preview, board shuffle, 4x4 Bingo grid, player timer cards, and live PB record feed.
+Open `http://localhost:8080` in your browser. The single-page application provides a focused challenge console with password unlock gate, distinct setup and playing views, 4x4 Bingo grid featuring player-claim colored squares and relative time deltas, streamlined player timers with single toggle start/reset controls, and a live PB record feed.
 
 ## Deployment to Google Cloud Run
 

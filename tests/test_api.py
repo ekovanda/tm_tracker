@@ -366,13 +366,14 @@ def test_timers_lifecycle():
     assert start_resp.status_code == 200
     assert start_resp.json()["status"] == "active"
 
-    # Stop timer
+    # Stop timer (resets to ready)
     stop_resp = client.post(
         f"/api/timers/{player_eljay.account_id}/action",
         json={"action": "stop"},
     )
     assert stop_resp.status_code == 200
-    assert stop_resp.json()["status"] == "stopped"
+    assert stop_resp.json()["status"] == "ready"
+    assert stop_resp.json()["remaining_seconds"] == 600.0
 
     # Restart timer
     restart_resp = client.post(
@@ -589,7 +590,7 @@ def test_full_interactive_frontend_flow():
                 json={"action": "stop"},
             )
             assert t_stop.status_code == 200
-            assert t_stop.json()["status"] == "stopped"
+            assert t_stop.json()["status"] == "ready"
 
             # 5. Stop & reset game
             stop_resp = client.post("/api/game/stop")

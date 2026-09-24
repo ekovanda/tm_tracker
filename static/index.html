@@ -73,101 +73,105 @@
     <!-- Global Alerts & Notifications -->
     <div id="notification-banner" class="notification-container" aria-live="polite"></div>
 
-    <!-- Pre-Session Configuration Panel (Visible before game starts) -->
-    <section id="pre-session-panel" class="panel panel-setup">
-      <div class="panel-header">
-        <div>
-          <h2 class="panel-title">Pre-Session Configuration</h2>
-          <p class="panel-subtitle">Configure campaign, shuffle board seed, and timing limits before starting the challenge.</p>
-        </div>
-        <div class="panel-badge">
-          <span class="badge badge-warning">Setup Mode</span>
-        </div>
-      </div>
-
-      <div class="setup-grid">
-        <!-- Campaign Selector -->
-        <div class="form-group setup-col-wide">
-          <label for="campaign-select" class="form-label">Official Campaign</label>
-          <select id="campaign-select" class="form-select">
-            <option value="" disabled selected>Loading official campaigns...</option>
-          </select>
-        </div>
-
-        <!-- Board Seed & Shuffle -->
-        <div class="form-group setup-col-narrow">
-          <label for="board-seed-input" class="form-label">Board Seed</label>
-          <div class="input-with-button">
-            <input type="number" id="board-seed-input" class="form-input" value="12345" min="1">
-            <button type="button" id="btn-shuffle" class="btn btn-secondary" title="Shuffle Board Seed">
-              <span class="btn-icon emoji">🔀</span>
-              <span>Shuffle</span>
-            </button>
+    <!-- Setup View (Pre-game Configuration Mode) -->
+    <div id="view-setup" class="view-stage">
+      <section id="pre-session-panel" class="panel panel-setup">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">Pre-Session Configuration</h2>
+            <p class="panel-subtitle">Configure campaign, shuffle board seed, and timing limits before starting the challenge.</p>
+          </div>
+          <div class="panel-badge">
+            <span class="badge badge-warning">Setup Mode</span>
           </div>
         </div>
 
-        <!-- Game Duration -->
-        <div class="form-group">
-          <label for="game-duration-input" class="form-label">Game Duration (Hours)</label>
-          <input type="number" id="game-duration-input" class="form-input" value="5" min="1" max="24" step="0.5">
+        <div class="setup-grid">
+          <!-- Campaign Selector -->
+          <div class="form-group setup-col-wide">
+            <label for="campaign-select" class="form-label">Official Campaign</label>
+            <select id="campaign-select" class="form-select">
+              <option value="" disabled selected>Loading official campaigns...</option>
+            </select>
+          </div>
+
+          <!-- Board Seed & Shuffle -->
+          <div class="form-group setup-col-narrow">
+            <label for="board-seed-input" class="form-label">Board Seed</label>
+            <div class="input-with-button">
+              <input type="number" id="board-seed-input" class="form-input" value="12345" min="1">
+              <button type="button" id="btn-shuffle" class="btn btn-secondary" title="Shuffle Board Seed">
+                <span class="btn-icon emoji">🔀</span>
+                <span>Shuffle</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Game Duration -->
+          <div class="form-group">
+            <label for="game-duration-input" class="form-label">Game Duration (Hours)</label>
+            <input type="number" id="game-duration-input" class="form-input" value="5" min="1" max="24" step="0.5">
+          </div>
+
+          <!-- Grace Period -->
+          <div class="form-group">
+            <label for="grace-period-input" class="form-label">Grace Period (Minutes)</label>
+            <input type="number" id="grace-period-input" class="form-input" value="30" min="0" max="120">
+          </div>
+
+          <!-- Player Timer Duration -->
+          <div class="form-group">
+            <label for="timer-duration-input" class="form-label">Player Timer (Minutes)</label>
+            <input type="number" id="timer-duration-input" class="form-input" value="10" min="1" max="60">
+          </div>
         </div>
 
-        <!-- Grace Period -->
-        <div class="form-group">
-          <label for="grace-period-input" class="form-label">Grace Period (Minutes)</label>
-          <input type="number" id="grace-period-input" class="form-input" value="30" min="0" max="120">
+        <div class="setup-actions">
+          <button type="button" id="btn-start-game" class="btn btn-success btn-large">
+            <span class="btn-icon emoji">🚀</span>
+            <span>Start Bingo Game</span>
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <!-- Playing View (Live Match Mode) -->
+    <div id="view-playing" class="view-stage" hidden>
+      <!-- Active Session Status Bar (Visible when game is running or stopped) -->
+      <section id="active-session-bar" class="panel panel-status">
+        <div class="status-summary">
+          <div class="status-metric">
+            <span class="metric-label">Game Status</span>
+            <span id="game-status-badge" class="badge badge-success">Active</span>
+          </div>
+          <div class="status-metric">
+            <span class="metric-label">Campaign</span>
+            <span id="active-campaign-name" class="metric-value">—</span>
+          </div>
+          <div class="status-metric">
+            <span class="metric-label">Session Remaining</span>
+            <span id="game-remaining-clock" class="metric-value font-mono">05:00:00</span>
+          </div>
+          <div id="grace-metric" class="status-metric">
+            <span class="metric-label">Grace Period</span>
+            <span id="grace-status-badge" class="badge badge-warning">Active (30:00)</span>
+          </div>
         </div>
 
-        <!-- Player Timer Duration -->
-        <div class="form-group">
-          <label for="timer-duration-input" class="form-label">Player Timer (Minutes)</label>
-          <input type="number" id="timer-duration-input" class="form-input" value="10" min="1" max="60">
+        <div class="status-actions">
+          <button type="button" id="btn-stop-game" class="btn btn-warning">
+            <span class="btn-icon emoji">⏹️</span>
+            <span>Stop</span>
+          </button>
+          <button type="button" id="btn-reset-game" class="btn btn-danger">
+            <span class="btn-icon emoji">🔄</span>
+            <span>Reset</span>
+          </button>
         </div>
-      </div>
+      </section>
 
-      <div class="setup-actions">
-        <button type="button" id="btn-start-game" class="btn btn-success btn-large">
-          <span class="btn-icon emoji">🚀</span>
-          <span>Start Bingo Game</span>
-        </button>
-      </div>
-    </section>
-
-    <!-- Active Session Status Bar (Visible when game is running or stopped) -->
-    <section id="active-session-bar" class="panel panel-status" hidden>
-      <div class="status-summary">
-        <div class="status-metric">
-          <span class="metric-label">Game Status</span>
-          <span id="game-status-badge" class="badge badge-success">Active</span>
-        </div>
-        <div class="status-metric">
-          <span class="metric-label">Campaign</span>
-          <span id="active-campaign-name" class="metric-value">—</span>
-        </div>
-        <div class="status-metric">
-          <span class="metric-label">Session Remaining</span>
-          <span id="game-remaining-clock" class="metric-value font-mono">05:00:00</span>
-        </div>
-        <div id="grace-metric" class="status-metric">
-          <span class="metric-label">Grace Period</span>
-          <span id="grace-status-badge" class="badge badge-warning">Active (30:00)</span>
-        </div>
-      </div>
-
-      <div class="status-actions">
-        <button type="button" id="btn-stop-game" class="btn btn-warning">
-          <span class="btn-icon emoji">⏹️</span>
-          <span>Stop</span>
-        </button>
-        <button type="button" id="btn-reset-game" class="btn btn-danger">
-          <span class="btn-icon emoji">🔄</span>
-          <span>Reset</span>
-        </button>
-      </div>
-    </section>
-
-    <!-- Main Challenge Content: Grid, Timers, Records -->
-    <main class="challenge-layout">
+      <!-- Main Challenge Content: Grid, Timers, Records -->
+      <main class="challenge-layout">
       <!-- Left Column: Bingo Board -->
       <section class="board-column">
         <div class="column-header">
@@ -186,264 +190,135 @@
 
         <!-- 4x4 Bingo Grid -->
         <div id="bingo-board" class="bingo-grid" role="grid" aria-label="Trackmania Bingo Board">
-          <!-- 16 track cards rendered dynamically or initial placeholder cells -->
-          <div class="track-cell series-0" data-cell-index="0" data-track-number="1">
-            <div class="cell-header">
-              <span class="series-badge">01</span>
-              <span class="track-name">Track 01</span>
-            </div>
-            <div class="cell-body">
-              <div class="owner-pill owner-neutral">Unclaimed</div>
-              <div class="cell-time font-mono">--:--.---</div>
-              <div class="cell-margin font-mono">+0.000s</div>
-            </div>
-            <div class="cell-rankings">
-              <div class="ranking-row rank-1"><span class="rank-badge">1</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
-              <div class="ranking-row rank-2"><span class="rank-badge">2</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
-              <div class="ranking-row rank-3"><span class="rank-badge">3</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+          <div class="track-cell series-0 owner-unclaimed" data-cell-index="0" data-track-number="1">
+            <div class="cell-top"><span class="cell-track-num">01</span><span class="cell-series-pill series-pill-0">White</span></div>
+            <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
+            <div class="cell-deltas">
+              <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+              <div class="delta-row delta-p3"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
             </div>
           </div>
-          <div class="track-cell series-1" data-cell-index="1" data-track-number="6">
-            <div class="cell-header">
-              <span class="series-badge">06</span>
-              <span class="track-name">Track 06</span>
-            </div>
-            <div class="cell-body">
-              <div class="owner-pill owner-neutral">Unclaimed</div>
-              <div class="cell-time font-mono">--:--.---</div>
-              <div class="cell-margin font-mono">+0.000s</div>
-            </div>
-            <div class="cell-rankings">
-              <div class="ranking-row rank-1"><span class="rank-badge">1</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
-              <div class="ranking-row rank-2"><span class="rank-badge">2</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
-              <div class="ranking-row rank-3"><span class="rank-badge">3</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+          <div class="track-cell series-1 owner-unclaimed" data-cell-index="1" data-track-number="6">
+            <div class="cell-top"><span class="cell-track-num">06</span><span class="cell-series-pill series-pill-1">Green</span></div>
+            <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
+            <div class="cell-deltas">
+              <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+              <div class="delta-row delta-p3"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
             </div>
           </div>
-          <div class="track-cell series-2" data-cell-index="2" data-track-number="11">
-            <div class="cell-header">
-              <span class="series-badge">11</span>
-              <span class="track-name">Track 11</span>
-            </div>
-            <div class="cell-body">
-              <div class="owner-pill owner-neutral">Unclaimed</div>
-              <div class="cell-time font-mono">--:--.---</div>
-              <div class="cell-margin font-mono">+0.000s</div>
-            </div>
-            <div class="cell-rankings">
-              <div class="ranking-row rank-1"><span class="rank-badge">1</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
-              <div class="ranking-row rank-2"><span class="rank-badge">2</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
-              <div class="ranking-row rank-3"><span class="rank-badge">3</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+          <div class="track-cell series-2 owner-unclaimed" data-cell-index="2" data-track-number="11">
+            <div class="cell-top"><span class="cell-track-num">11</span><span class="cell-series-pill series-pill-2">Blue</span></div>
+            <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
+            <div class="cell-deltas">
+              <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+              <div class="delta-row delta-p3"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
             </div>
           </div>
-          <div class="track-cell series-3" data-cell-index="3" data-track-number="16">
-            <div class="cell-header">
-              <span class="series-badge">16</span>
-              <span class="track-name">Track 16</span>
-            </div>
-            <div class="cell-body">
-              <div class="owner-pill owner-neutral">Unclaimed</div>
-              <div class="cell-time font-mono">--:--.---</div>
-              <div class="cell-margin font-mono">+0.000s</div>
-            </div>
-            <div class="cell-rankings">
-              <div class="ranking-row rank-1"><span class="rank-badge">1</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
-              <div class="ranking-row rank-2"><span class="rank-badge">2</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
-              <div class="ranking-row rank-3"><span class="rank-badge">3</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+          <div class="track-cell series-3 owner-unclaimed" data-cell-index="3" data-track-number="16">
+            <div class="cell-top"><span class="cell-track-num">16</span><span class="cell-series-pill series-pill-3">Red</span></div>
+            <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
+            <div class="cell-deltas">
+              <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+              <div class="delta-row delta-p3"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
             </div>
           </div>
 
-          <div class="track-cell series-3" data-cell-index="4" data-track-number="17">
-            <div class="cell-header">
-              <span class="series-badge">17</span>
-              <span class="track-name">Track 17</span>
-            </div>
-            <div class="cell-body">
-              <div class="owner-pill owner-neutral">Unclaimed</div>
-              <div class="cell-time font-mono">--:--.---</div>
-              <div class="cell-margin font-mono">+0.000s</div>
-            </div>
-            <div class="cell-rankings">
-              <div class="ranking-row rank-1"><span class="rank-badge">1</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
-              <div class="ranking-row rank-2"><span class="rank-badge">2</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
-              <div class="ranking-row rank-3"><span class="rank-badge">3</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+          <div class="track-cell series-3 owner-unclaimed" data-cell-index="4" data-track-number="17">
+            <div class="cell-top"><span class="cell-track-num">17</span><span class="cell-series-pill series-pill-3">Red</span></div>
+            <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
+            <div class="cell-deltas">
+              <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+              <div class="delta-row delta-p3"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
             </div>
           </div>
-          <div class="track-cell series-2" data-cell-index="5" data-track-number="12">
-            <div class="cell-header">
-              <span class="series-badge">12</span>
-              <span class="track-name">Track 12</span>
-            </div>
-            <div class="cell-body">
-              <div class="owner-pill owner-neutral">Unclaimed</div>
-              <div class="cell-time font-mono">--:--.---</div>
-              <div class="cell-margin font-mono">+0.000s</div>
-            </div>
-            <div class="cell-rankings">
-              <div class="ranking-row rank-1"><span class="rank-badge">1</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
-              <div class="ranking-row rank-2"><span class="rank-badge">2</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
-              <div class="ranking-row rank-3"><span class="rank-badge">3</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+          <div class="track-cell series-2 owner-unclaimed" data-cell-index="5" data-track-number="12">
+            <div class="cell-top"><span class="cell-track-num">12</span><span class="cell-series-pill series-pill-2">Blue</span></div>
+            <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
+            <div class="cell-deltas">
+              <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+              <div class="delta-row delta-p3"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
             </div>
           </div>
-          <div class="track-cell series-1" data-cell-index="6" data-track-number="7">
-            <div class="cell-header">
-              <span class="series-badge">07</span>
-              <span class="track-name">Track 07</span>
-            </div>
-            <div class="cell-body">
-              <div class="owner-pill owner-neutral">Unclaimed</div>
-              <div class="cell-time font-mono">--:--.---</div>
-              <div class="cell-margin font-mono">+0.000s</div>
-            </div>
-            <div class="cell-rankings">
-              <div class="ranking-row rank-1"><span class="rank-badge">1</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
-              <div class="ranking-row rank-2"><span class="rank-badge">2</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
-              <div class="ranking-row rank-3"><span class="rank-badge">3</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+          <div class="track-cell series-1 owner-unclaimed" data-cell-index="6" data-track-number="7">
+            <div class="cell-top"><span class="cell-track-num">07</span><span class="cell-series-pill series-pill-1">Green</span></div>
+            <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
+            <div class="cell-deltas">
+              <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+              <div class="delta-row delta-p3"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
             </div>
           </div>
-          <div class="track-cell series-0" data-cell-index="7" data-track-number="2">
-            <div class="cell-header">
-              <span class="series-badge">02</span>
-              <span class="track-name">Track 02</span>
-            </div>
-            <div class="cell-body">
-              <div class="owner-pill owner-neutral">Unclaimed</div>
-              <div class="cell-time font-mono">--:--.---</div>
-              <div class="cell-margin font-mono">+0.000s</div>
-            </div>
-            <div class="cell-rankings">
-              <div class="ranking-row rank-1"><span class="rank-badge">1</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
-              <div class="ranking-row rank-2"><span class="rank-badge">2</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
-              <div class="ranking-row rank-3"><span class="rank-badge">3</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+          <div class="track-cell series-0 owner-unclaimed" data-cell-index="7" data-track-number="2">
+            <div class="cell-top"><span class="cell-track-num">02</span><span class="cell-series-pill series-pill-0">White</span></div>
+            <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
+            <div class="cell-deltas">
+              <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+              <div class="delta-row delta-p3"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
             </div>
           </div>
 
-          <div class="track-cell series-1" data-cell-index="8" data-track-number="8">
-            <div class="cell-header">
-              <span class="series-badge">08</span>
-              <span class="track-name">Track 08</span>
-            </div>
-            <div class="cell-body">
-              <div class="owner-pill owner-neutral">Unclaimed</div>
-              <div class="cell-time font-mono">--:--.---</div>
-              <div class="cell-margin font-mono">+0.000s</div>
-            </div>
-            <div class="cell-rankings">
-              <div class="ranking-row rank-1"><span class="rank-badge">1</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
-              <div class="ranking-row rank-2"><span class="rank-badge">2</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
-              <div class="ranking-row rank-3"><span class="rank-badge">3</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+          <div class="track-cell series-1 owner-unclaimed" data-cell-index="8" data-track-number="8">
+            <div class="cell-top"><span class="cell-track-num">08</span><span class="cell-series-pill series-pill-1">Green</span></div>
+            <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
+            <div class="cell-deltas">
+              <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+              <div class="delta-row delta-p3"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
             </div>
           </div>
-          <div class="track-cell series-0" data-cell-index="9" data-track-number="3">
-            <div class="cell-header">
-              <span class="series-badge">03</span>
-              <span class="track-name">Track 03</span>
-            </div>
-            <div class="cell-body">
-              <div class="owner-pill owner-neutral">Unclaimed</div>
-              <div class="cell-time font-mono">--:--.---</div>
-              <div class="cell-margin font-mono">+0.000s</div>
-            </div>
-            <div class="cell-rankings">
-              <div class="ranking-row rank-1"><span class="rank-badge">1</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
-              <div class="ranking-row rank-2"><span class="rank-badge">2</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
-              <div class="ranking-row rank-3"><span class="rank-badge">3</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+          <div class="track-cell series-0 owner-unclaimed" data-cell-index="9" data-track-number="3">
+            <div class="cell-top"><span class="cell-track-num">03</span><span class="cell-series-pill series-pill-0">White</span></div>
+            <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
+            <div class="cell-deltas">
+              <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+              <div class="delta-row delta-p3"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
             </div>
           </div>
-          <div class="track-cell series-3" data-cell-index="10" data-track-number="18">
-            <div class="cell-header">
-              <span class="series-badge">18</span>
-              <span class="track-name">Track 18</span>
-            </div>
-            <div class="cell-body">
-              <div class="owner-pill owner-neutral">Unclaimed</div>
-              <div class="cell-time font-mono">--:--.---</div>
-              <div class="cell-margin font-mono">+0.000s</div>
-            </div>
-            <div class="cell-rankings">
-              <div class="ranking-row rank-1"><span class="rank-badge">1</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
-              <div class="ranking-row rank-2"><span class="rank-badge">2</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
-              <div class="ranking-row rank-3"><span class="rank-badge">3</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+          <div class="track-cell series-3 owner-unclaimed" data-cell-index="10" data-track-number="18">
+            <div class="cell-top"><span class="cell-track-num">18</span><span class="cell-series-pill series-pill-3">Red</span></div>
+            <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
+            <div class="cell-deltas">
+              <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+              <div class="delta-row delta-p3"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
             </div>
           </div>
-          <div class="track-cell series-2" data-cell-index="11" data-track-number="13">
-            <div class="cell-header">
-              <span class="series-badge">13</span>
-              <span class="track-name">Track 13</span>
-            </div>
-            <div class="cell-body">
-              <div class="owner-pill owner-neutral">Unclaimed</div>
-              <div class="cell-time font-mono">--:--.---</div>
-              <div class="cell-margin font-mono">+0.000s</div>
-            </div>
-            <div class="cell-rankings">
-              <div class="ranking-row rank-1"><span class="rank-badge">1</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
-              <div class="ranking-row rank-2"><span class="rank-badge">2</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
-              <div class="ranking-row rank-3"><span class="rank-badge">3</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+          <div class="track-cell series-2 owner-unclaimed" data-cell-index="11" data-track-number="13">
+            <div class="cell-top"><span class="cell-track-num">13</span><span class="cell-series-pill series-pill-2">Blue</span></div>
+            <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
+            <div class="cell-deltas">
+              <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+              <div class="delta-row delta-p3"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
             </div>
           </div>
 
-          <div class="track-cell series-2" data-cell-index="12" data-track-number="14">
-            <div class="cell-header">
-              <span class="series-badge">14</span>
-              <span class="track-name">Track 14</span>
-            </div>
-            <div class="cell-body">
-              <div class="owner-pill owner-neutral">Unclaimed</div>
-              <div class="cell-time font-mono">--:--.---</div>
-              <div class="cell-margin font-mono">+0.000s</div>
-            </div>
-            <div class="cell-rankings">
-              <div class="ranking-row rank-1"><span class="rank-badge">1</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
-              <div class="ranking-row rank-2"><span class="rank-badge">2</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
-              <div class="ranking-row rank-3"><span class="rank-badge">3</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+          <div class="track-cell series-2 owner-unclaimed" data-cell-index="12" data-track-number="14">
+            <div class="cell-top"><span class="cell-track-num">14</span><span class="cell-series-pill series-pill-2">Blue</span></div>
+            <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
+            <div class="cell-deltas">
+              <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+              <div class="delta-row delta-p3"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
             </div>
           </div>
-          <div class="track-cell series-3" data-cell-index="13" data-track-number="19">
-            <div class="cell-header">
-              <span class="series-badge">19</span>
-              <span class="track-name">Track 19</span>
-            </div>
-            <div class="cell-body">
-              <div class="owner-pill owner-neutral">Unclaimed</div>
-              <div class="cell-time font-mono">--:--.---</div>
-              <div class="cell-margin font-mono">+0.000s</div>
-            </div>
-            <div class="cell-rankings">
-              <div class="ranking-row rank-1"><span class="rank-badge">1</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
-              <div class="ranking-row rank-2"><span class="rank-badge">2</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
-              <div class="ranking-row rank-3"><span class="rank-badge">3</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+          <div class="track-cell series-3 owner-unclaimed" data-cell-index="13" data-track-number="19">
+            <div class="cell-top"><span class="cell-track-num">19</span><span class="cell-series-pill series-pill-3">Red</span></div>
+            <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
+            <div class="cell-deltas">
+              <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+              <div class="delta-row delta-p3"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
             </div>
           </div>
-          <div class="track-cell series-0" data-cell-index="14" data-track-number="4">
-            <div class="cell-header">
-              <span class="series-badge">04</span>
-              <span class="track-name">Track 04</span>
-            </div>
-            <div class="cell-body">
-              <div class="owner-pill owner-neutral">Unclaimed</div>
-              <div class="cell-time font-mono">--:--.---</div>
-              <div class="cell-margin font-mono">+0.000s</div>
-            </div>
-            <div class="cell-rankings">
-              <div class="ranking-row rank-1"><span class="rank-badge">1</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
-              <div class="ranking-row rank-2"><span class="rank-badge">2</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
-              <div class="ranking-row rank-3"><span class="rank-badge">3</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+          <div class="track-cell series-0 owner-unclaimed" data-cell-index="14" data-track-number="4">
+            <div class="cell-top"><span class="cell-track-num">04</span><span class="cell-series-pill series-pill-0">White</span></div>
+            <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
+            <div class="cell-deltas">
+              <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+              <div class="delta-row delta-p3"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
             </div>
           </div>
-          <div class="track-cell series-1" data-cell-index="15" data-track-number="9">
-            <div class="cell-header">
-              <span class="series-badge">09</span>
-              <span class="track-name">Track 09</span>
-            </div>
-            <div class="cell-body">
-              <div class="owner-pill owner-neutral">Unclaimed</div>
-              <div class="cell-time font-mono">--:--.---</div>
-              <div class="cell-margin font-mono">+0.000s</div>
-            </div>
-            <div class="cell-rankings">
-              <div class="ranking-row rank-1"><span class="rank-badge">1</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
-              <div class="ranking-row rank-2"><span class="rank-badge">2</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
-              <div class="ranking-row rank-3"><span class="rank-badge">3</span><span class="rank-name">—</span><span class="rank-time font-mono">--:--.---</span></div>
+          <div class="track-cell series-1 owner-unclaimed" data-cell-index="15" data-track-number="9">
+            <div class="cell-top"><span class="cell-track-num">09</span><span class="cell-series-pill series-pill-1">Green</span></div>
+            <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
+            <div class="cell-deltas">
+              <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+              <div class="delta-row delta-p3"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
             </div>
           </div>
         </div>
@@ -464,26 +339,15 @@
               <div class="player-header">
                 <div class="player-identity">
                   <span class="player-avatar">E</span>
-                  <div>
-                    <h3 class="player-name">Eljay</h3>
-                    <div class="player-medals">
-                      <span class="medal-tag medal-gold" title="Gold Medals"><span class="emoji">🥇</span> <span class="gold-count">0</span></span>
-                      <span class="medal-tag medal-silver" title="Silver Medals"><span class="emoji">🥈</span> <span class="silver-count">0</span></span>
-                      <span class="medal-tag medal-bronze" title="Bronze Medals"><span class="emoji">🥉</span> <span class="bronze-count">0</span></span>
-                      <span class="medal-points" title="Total Rank Points"><span class="points-count">0</span> pts</span>
-                    </div>
-                  </div>
+                  <h3 class="player-name">Eljay</h3>
                 </div>
-                <span class="timer-badge timer-ready">Ready</span>
+                <div class="timer-actions-group">
+                  <span class="timer-display font-mono">10:00</span>
+                  <button type="button" class="btn btn-sm btn-timer-toggle btn-timer-start" data-action="start" data-account="7e468ff6-4558-43ce-ad23-591dd86291c0">Start</button>
+                </div>
               </div>
-              <div class="timer-display font-mono">10:00</div>
               <div class="progress-bar-container" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
                 <div class="progress-bar-fill" style="width: 100%;"></div>
-              </div>
-              <div class="timer-controls">
-                <button type="button" class="btn btn-sm btn-timer-start" data-action="start" data-account="7e468ff6-4558-43ce-ad23-591dd86291c0">Start</button>
-                <button type="button" class="btn btn-sm btn-timer-stop" data-action="stop" data-account="7e468ff6-4558-43ce-ad23-591dd86291c0">Stop</button>
-                <button type="button" class="btn btn-sm btn-timer-restart" data-action="restart" data-account="7e468ff6-4558-43ce-ad23-591dd86291c0">Restart</button>
               </div>
             </div>
 
@@ -492,26 +356,15 @@
               <div class="player-header">
                 <div class="player-identity">
                   <span class="player-avatar">L</span>
-                  <div>
-                    <h3 class="player-name">Lry</h3>
-                    <div class="player-medals">
-                      <span class="medal-tag medal-gold" title="Gold Medals"><span class="emoji">🥇</span> <span class="gold-count">0</span></span>
-                      <span class="medal-tag medal-silver" title="Silver Medals"><span class="emoji">🥈</span> <span class="silver-count">0</span></span>
-                      <span class="medal-tag medal-bronze" title="Bronze Medals"><span class="emoji">🥉</span> <span class="bronze-count">0</span></span>
-                      <span class="medal-points" title="Total Rank Points"><span class="points-count">0</span> pts</span>
-                    </div>
-                  </div>
+                  <h3 class="player-name">Lry</h3>
                 </div>
-                <span class="timer-badge timer-ready">Ready</span>
+                <div class="timer-actions-group">
+                  <span class="timer-display font-mono">10:00</span>
+                  <button type="button" class="btn btn-sm btn-timer-toggle btn-timer-start" data-action="start" data-account="f00ab19a-14e5-4e6e-9a45-78f1af8487e1">Start</button>
+                </div>
               </div>
-              <div class="timer-display font-mono">10:00</div>
               <div class="progress-bar-container" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
                 <div class="progress-bar-fill" style="width: 100%;"></div>
-              </div>
-              <div class="timer-controls">
-                <button type="button" class="btn btn-sm btn-timer-start" data-action="start" data-account="f00ab19a-14e5-4e6e-9a45-78f1af8487e1">Start</button>
-                <button type="button" class="btn btn-sm btn-timer-stop" data-action="stop" data-account="f00ab19a-14e5-4e6e-9a45-78f1af8487e1">Stop</button>
-                <button type="button" class="btn btn-sm btn-timer-restart" data-action="restart" data-account="f00ab19a-14e5-4e6e-9a45-78f1af8487e1">Restart</button>
               </div>
             </div>
 
@@ -520,26 +373,15 @@
               <div class="player-header">
                 <div class="player-identity">
                   <span class="player-avatar">T</span>
-                  <div>
-                    <h3 class="player-name">Timo</h3>
-                    <div class="player-medals">
-                      <span class="medal-tag medal-gold" title="Gold Medals"><span class="emoji">🥇</span> <span class="gold-count">0</span></span>
-                      <span class="medal-tag medal-silver" title="Silver Medals"><span class="emoji">🥈</span> <span class="silver-count">0</span></span>
-                      <span class="medal-tag medal-bronze" title="Bronze Medals"><span class="emoji">🥉</span> <span class="bronze-count">0</span></span>
-                      <span class="medal-points" title="Total Rank Points"><span class="points-count">0</span> pts</span>
-                    </div>
-                  </div>
+                  <h3 class="player-name">Timo</h3>
                 </div>
-                <span class="timer-badge timer-ready">Ready</span>
+                <div class="timer-actions-group">
+                  <span class="timer-display font-mono">10:00</span>
+                  <button type="button" class="btn btn-sm btn-timer-toggle btn-timer-start" data-action="start" data-account="b9b79f89-19e7-4f26-be01-03556b8890b9">Start</button>
+                </div>
               </div>
-              <div class="timer-display font-mono">10:00</div>
               <div class="progress-bar-container" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
                 <div class="progress-bar-fill" style="width: 100%;"></div>
-              </div>
-              <div class="timer-controls">
-                <button type="button" class="btn btn-sm btn-timer-start" data-action="start" data-account="b9b79f89-19e7-4f26-be01-03556b8890b9">Start</button>
-                <button type="button" class="btn btn-sm btn-timer-stop" data-action="stop" data-account="b9b79f89-19e7-4f26-be01-03556b8890b9">Stop</button>
-                <button type="button" class="btn btn-sm btn-timer-restart" data-action="restart" data-account="b9b79f89-19e7-4f26-be01-03556b8890b9">Restart</button>
               </div>
             </div>
           </div>
@@ -561,7 +403,8 @@
           </div>
         </section>
       </aside>
-    </main>
+      </main>
+    </div>
   </div>
 
   <script src="/static/app.js?v=2" defer></script>

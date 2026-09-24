@@ -257,13 +257,20 @@ def test_manual_timer_can_restart_from_any_terminal_state():
     assert restarted.started_at == start + timedelta(minutes=12)
 
 
-def test_manual_timer_start_stop_and_expiry_are_terminal():
+def test_manual_timer_stop_resets_to_ready():
     start = datetime(2026, 1, 1, tzinfo=UTC)
-    stopped = stop_manual_timer(start_manual_timer(ManualTimerState(), start))
+    active = start_manual_timer(ManualTimerState(), start)
+    stopped = stop_manual_timer(active)
 
-    assert stopped.status == "stopped"
-    assert start_manual_timer(stopped, start) is stopped
+    assert stopped.status == "ready"
+    assert stopped.duration == MANUAL_TIMER_DURATION
+    assert manual_timer_remaining(stopped, start) == MANUAL_TIMER_DURATION
+
+    restarted = start_manual_timer(stopped, start + timedelta(seconds=10))
+    assert restarted.status == "active"
+
     expired = update_manual_timer(
-        start_manual_timer(ManualTimerState(), start), start + MANUAL_TIMER_DURATION
+        restarted, start + timedelta(seconds=10) + MANUAL_TIMER_DURATION
     )
-    assert stop_manual_timer(expired) is expired
+    assert expired.status == "expired"
+    assert stop_manual_timer(expired).status == "ready"

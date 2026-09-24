@@ -89,13 +89,11 @@
     }
 
     if (rawStatus === 'stopped') {
-      const remainingSeconds = Math.max(0, (typeof timer.remaining_seconds === 'number') ? timer.remaining_seconds : 0);
-      const fraction = duration > 0 ? Math.max(0, Math.min(1, remainingSeconds / duration)) : 0;
       return {
-        status: 'stopped',
-        remainingSeconds: remainingSeconds,
-        progressFraction: fraction,
-        formatted: formatTime(remainingSeconds),
+        status: 'ready',
+        remainingSeconds: duration,
+        progressFraction: 1,
+        formatted: formatTime(duration),
       };
     }
 
@@ -256,10 +254,17 @@
         progressContainer.setAttribute('aria-valuenow', String(pct));
       }
 
-      const badge = card.querySelector('.timer-badge');
-      if (badge) {
-        badge.className = `timer-badge timer-${computed.status}`;
-        badge.textContent = computed.status.charAt(0).toUpperCase() + computed.status.slice(1);
+      const toggleBtn = card.querySelector('.btn-timer-toggle');
+      if (toggleBtn) {
+        if (computed.status === 'active') {
+          toggleBtn.setAttribute('data-action', 'stop');
+          toggleBtn.className = 'btn btn-sm btn-timer-toggle btn-timer-stop';
+          toggleBtn.textContent = 'Stop';
+        } else {
+          toggleBtn.setAttribute('data-action', 'start');
+          toggleBtn.className = 'btn btn-sm btn-timer-toggle btn-timer-start';
+          toggleBtn.textContent = 'Start';
+        }
       }
     }
 
@@ -472,11 +477,15 @@
     renderGameState() {
       if (!this.gameState) return;
 
+      const viewSetup = document.getElementById('view-setup');
+      const viewPlaying = document.getElementById('view-playing');
       const preSessionPanel = document.getElementById('pre-session-panel');
       const activeBar = document.getElementById('active-session-bar');
       const isPending = this.gameState.status === 'pending';
 
       if (isPending) {
+        if (viewSetup) viewSetup.removeAttribute('hidden');
+        if (viewPlaying) viewPlaying.setAttribute('hidden', 'true');
         if (preSessionPanel) preSessionPanel.removeAttribute('hidden');
         if (activeBar) activeBar.setAttribute('hidden', 'true');
 
@@ -526,6 +535,8 @@
           this.renderBoard(pending.board);
         }
       } else {
+        if (viewSetup) viewSetup.setAttribute('hidden', 'true');
+        if (viewPlaying) viewPlaying.removeAttribute('hidden');
         if (preSessionPanel) preSessionPanel.setAttribute('hidden', 'true');
         if (activeBar) activeBar.removeAttribute('hidden');
 
@@ -563,60 +574,68 @@
           flatIndex++;
           if (!cellEl || !cellData) continue;
 
-          // Series class
+          // Series and Owner classes
           const series = cellData.track ? cellData.track.series : 0;
-          cellEl.className = `track-cell series-${series}`;
-
-          // Header
-          const seriesBadge = cellEl.querySelector('.series-badge');
-          if (seriesBadge && cellData.track) {
-            seriesBadge.textContent = String(cellData.track.track_number).padStart(2, '0');
+          let ownerClass = 'owner-unclaimed';
+          let ownerName = 'Unclaimed';
+          if (cellData.owner && cellData.owner.alias) {
+            const aliasLower = cellData.owner.alias.toLowerCase();
+            ownerClass = `owner-${aliasLower}`;
+            ownerName = cellData.owner.alias;
           }
 
-          const trackName = cellEl.querySelector('.track-name');
-          if (trackName && cellData.track) {
-            trackName.textContent = cellData.track.name || `Track ${cellData.track.track_number}`;
+          cellEl.className = `track-cell series-${series} ${ownerClass}`;
+
+          // 1. Track Number
+          const trackNumEl = cellEl.querySelector('.cell-track-num');
+          if (trackNumEl && cellData.track) {
+            trackNumEl.textContent = String(cellData.track.track_number).padStart(2, '0');
           }
 
-          // Owner & Time
-          const ownerPill = cellEl.querySelector('.owner-pill');
-          if (ownerPill) {
-            if (cellData.owner && cellData.owner.alias) {
-              const aliasLower = cellData.owner.alias.toLowerCase();
-              ownerPill.className = `owner-pill owner-${aliasLower}`;
-              ownerPill.textContent = cellData.owner.alias;
-            } else {
-              ownerPill.className = 'owner-pill owner-neutral';
-              ownerPill.textContent = 'Unclaimed';
-            }
+          const seriesPill = cellEl.querySelector('.cell-series-pill');
+          if (seriesPill && cellData.track) {
+            const seriesNames = ['White', 'Green', 'Blue', 'Red'];
+            seriesPill.textContent = seriesNames[series] || '';
+            seriesPill.className = `cell-series-pill series-pill-${series}`;
           }
 
-          const cellTime = cellEl.querySelector('.cell-time');
-          if (cellTime) {
-            cellTime.textContent = formatTrackTime(cellData.winning_time);
+          // 2. Owner & Record Time
+          const ownerLabel = cellEl.querySelector('.cell-owner-label');
+          if (ownerLabel) {
+            ownerLabel.textContent = ownerName;
           }
 
-          const cellMargin = cellEl.querySelector('.cell-margin');
-          if (cellMargin) {
-            cellMargin.textContent = cellData.margin !== null ? `+${(cellData.margin / 1000).toFixed(3)}s` : '+0.000s';
+          const recordTimeEl = cellEl.querySelector('.cell-record-time');
+          if (recordTimeEl) {
+            recordTimeEl.textContent = formatTrackTime(cellData.winning_time);
           }
 
-          // Top 3 Rankings
-          const rankRows = cellEl.querySelectorAll('.cell-rankings .ranking-row');
+          // 3. P2 & P3 Differences to First
           const rankings = cellData.rankings || [];
-          for (let i = 0; i < 3; i++) {
-            const row = rankRows[i];
-            if (!row) continue;
-            const rData = rankings[i];
-            const nameEl = row.querySelector('.rank-name');
-            const timeEl = row.querySelector('.rank-time');
-            if (rData) {
-              if (nameEl) nameEl.textContent = rData.player ? rData.player.alias : '—';
-              if (timeEl) timeEl.textContent = formatTrackTime(rData.time);
-            } else {
-              if (nameEl) nameEl.textContent = '—';
-              if (timeEl) timeEl.textContent = '--:--.---';
-            }
+          const winningTime = cellData.winning_time;
+
+          // P2
+          const p2NameEl = cellEl.querySelector('.delta-p2 .delta-name');
+          const p2TimeEl = cellEl.querySelector('.delta-p2 .delta-time');
+          if (rankings.length > 1 && winningTime != null && rankings[1].time != null) {
+            const diffMs = rankings[1].time - winningTime;
+            if (p2NameEl) p2NameEl.textContent = rankings[1].player ? rankings[1].player.alias : '—';
+            if (p2TimeEl) p2TimeEl.textContent = `+${(diffMs / 1000).toFixed(3)}s`;
+          } else {
+            if (p2NameEl) p2NameEl.textContent = rankings.length > 1 && rankings[1].player ? rankings[1].player.alias : '—';
+            if (p2TimeEl) p2TimeEl.textContent = '—';
+          }
+
+          // P3
+          const p3NameEl = cellEl.querySelector('.delta-p3 .delta-name');
+          const p3TimeEl = cellEl.querySelector('.delta-p3 .delta-time');
+          if (rankings.length > 2 && winningTime != null && rankings[2].time != null) {
+            const diffMs = rankings[2].time - winningTime;
+            if (p3NameEl) p3NameEl.textContent = rankings[2].player ? rankings[2].player.alias : '—';
+            if (p3TimeEl) p3TimeEl.textContent = `+${(diffMs / 1000).toFixed(3)}s`;
+          } else {
+            if (p3NameEl) p3NameEl.textContent = rankings.length > 2 && rankings[2].player ? rankings[2].player.alias : '—';
+            if (p3TimeEl) p3TimeEl.textContent = '—';
           }
         }
       }

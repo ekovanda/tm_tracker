@@ -196,11 +196,11 @@ def start_manual_timer(
 
 
 def stop_manual_timer(timer: ManualTimerState) -> ManualTimerState:
-    """Stop a running manual timer."""
+    """Stop a running manual timer and reset it back to ready."""
 
-    if timer.status != "active":
+    if timer.status not in ("active", "expired", "stopped"):
         return timer
-    return replace(timer, status="stopped")
+    return ManualTimerState(status="ready", duration=timer.duration)
 
 
 def restart_manual_timer(
@@ -231,6 +231,8 @@ def update_manual_timer(timer: ManualTimerState, now: datetime) -> ManualTimerSt
 def manual_timer_remaining(timer: ManualTimerState, now: datetime) -> timedelta:
     """Return the non-negative time remaining on the manual timer."""
 
+    if timer.status == "ready":
+        return timer.duration
     if timer.status != "active" or timer.started_at is None:
         return timedelta(0)
     return max(timer.duration - (now - timer.started_at), timedelta(0))
