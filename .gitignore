@@ -8,5 +8,5 @@ __pycache__/
 
 development-docs/
 development_docs/
-DEVELOPER.md
-scripts/
+scripts/*
+!scripts/deploy.sh

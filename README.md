@@ -16,7 +16,10 @@ The project makes a live Trackmania challenge easy to run and follow:
 - Configure campaign, player timer duration, opening grace period, and maximum game length before starting.
 - Automatically checkpoint active game state and player timers to Firestore, rehydrating sessions across server restarts or redeployments.
 
-The application currently has three configured players: Eljay, Lry, and Timo. Player account IDs and API credentials are configuration concerns; credentials must never be committed.
+## Live Deployment
+
+- **Live URL**: [https://shorturl.fm/tm-bingo](https://shorturl.fm/tm-bingo)
+- **Direct Cloud Run URL**: `https://tm-bingo-281908789663.europe-west4.run.app`
 
 ## Requirements
 
@@ -65,7 +68,17 @@ Open `http://localhost:8080` in your browser. The single-page application provid
 
 The application is containerized with a production-ready `Dockerfile` and deploys seamlessly to GCP Cloud Run.
 
-### Building & Pushing the Container Image
+### Quick Deployment Script
+
+For rapid automated deployment without manual configuration:
+
+```bash
+./scripts/deploy.sh
+```
+
+This script builds the image via Cloud Build, deploys to Cloud Run with required single-instance, timeout, and secret-manager configurations, and displays the direct Cloud Run URL as well as the short URL (`https://shorturl.fm/tm-bingo`).
+
+### Building & Pushing the Container Image (Manual)
 
 Build and push the image to Artifact Registry (replace `<PROJECT_ID>` and `<REGION>` with your GCP project and preferred region):
 
