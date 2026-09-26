@@ -1,6 +1,14 @@
 *venv*
 .env
+.streamlit/
 scratch.ipynb
 __pycache__/
+*.egg-info/
+.coverage
 
 development-docs/
+development_docs/
+scripts/*
+!scripts/deploy.sh
+!scripts/deploy.ps1
+!scripts/verify_connection.py

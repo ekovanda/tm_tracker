@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tm-bingo"
+version = "0.1.0"
+description = "Trackmania Bingo tracking application"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "fastapi>=0.115.0",
+    "google-cloud-firestore>=2.19.0",
+    "uvicorn>=0.30.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "httpx>=0.27.0",
+    "ipykernel",
+    "mypy",
+    "pylint",
+    "pre-commit",
+    "pytest",
+    "pytest-cov",
+    "ruff",
+    "types-requests",
+]
+
+[tool.setuptools]
+py-modules = [
+    "api",
+    "authentication",
+    "bingo",
+    "bingo_service",
+    "config",
+    "live_services",
+    "logger",
+    "player",
+    "storage",
+    "tm_lookups",
+    "track",
+    "utils",
+]
+
+[tool.mypy]
+explicit_package_bases = true
+
+[tool.pylint.messages_control]
+disable = [
+    "attribute-defined-outside-init",
+    "duplicate-code",
+    "missing-class-docstring",
+    "missing-function-docstring",
+    "missing-module-docstring",
+    "too-few-public-methods",
+]

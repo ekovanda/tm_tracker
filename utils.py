@@ -5,7 +5,6 @@ Contains various utility functions
 import math
 
 
-# TODO: Add unit test for this
 def prettify_time(time: int) -> str:
     """
     Prettifies a time for nicer display.

@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Trackmania Bingo Challenge Live Tracker">
+  <meta name="theme-color" content="#0b0f19">
+  <title>Trackmania Bingo Tracker</title>
+  <link rel="stylesheet" href="/static/styles.css?v=2">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&family=Noto+Color+Emoji&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Password Unlock Gate Modal -->
+  <div id="password-gate" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="brand-badge"><span class="emoji">🏁</span> TM BINGO</div>
+        <h2 class="modal-title">Trackmania Bingo Tracker</h2>
+        <p class="modal-subtitle">Enter the application password to unlock the challenge console.</p>
+      </div>
+      <form id="password-form" class="modal-form" autocomplete="off">
+        <div class="form-group">
+          <label for="password-input" class="form-label">Application Password</label>
+          <input
+            type="password"
+            id="password-input"
+            class="form-input"
+            placeholder="••••••••••••"
+            required
+            autocomplete="current-password"
+          >
+        </div>
+        <div id="password-error" class="alert alert-danger" hidden role="alert"></div>
+        <button type="submit" id="btn-unlock" class="btn btn-primary btn-block">
+          Unlock Console
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Main Application Wrapper -->
+  <div id="app" class="app-layout">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="header-brand">
+        <div class="brand-icon"><span class="emoji">🏁</span></div>
+        <div>
+          <h1 class="brand-title">Trackmania Bingo Tracker</h1>
+          <div class="brand-meta">
+            <span id="app-version" class="badge badge-subtle">v0.1.0</span>
+            <span class="meta-separator">•</span>
+            <span id="connection-status" class="status-indicator">
+              <span class="status-dot status-dot-online"></span>
+              <span id="status-text">Connected</span>
+            </span>
+          </div>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button id="btn-refresh" class="btn btn-ghost" title="Refresh Leaderboards">
+          <span class="btn-icon emoji">🔄</span>
+          <span>Refresh</span>
+        </button>
+        <button id="btn-lock" class="btn btn-ghost" title="Lock Console">
+          <span class="btn-icon emoji">🔒</span>
+          <span>Lock</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Global Alerts & Notifications -->
+    <div id="notification-banner" class="notification-container" aria-live="polite"></div>
+
+    <!-- Setup View (Pre-game Configuration Mode) -->
+    <div id="view-setup" class="view-stage">
+      <section id="pre-session-panel" class="panel panel-setup">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">Pre-Session Configuration</h2>
+            <p class="panel-subtitle">Configure campaign, shuffle board seed, and timing limits before starting the challenge.</p>
+          </div>
+          <div class="panel-badge">
+            <span class="badge badge-warning">Setup Mode</span>
+          </div>
+        </div>
+
+        <div class="setup-grid">
+          <!-- Campaign Selector -->
+          <div class="form-group setup-col-wide">
+            <label for="campaign-select" class="form-label">Official Campaign</label>
+            <select id="campaign-select" class="form-select">
+              <option value="" disabled selected>Loading official campaigns...</option>
+            </select>
+          </div>
+
+          <!-- Board Seed & Shuffle -->
+          <div class="form-group setup-col-narrow">
+            <label for="board-seed-input" class="form-label">Board Seed</label>
+            <div class="input-with-button">
+              <input type="number" id="board-seed-input" class="form-input" value="12345" min="1">
+              <button type="button" id="btn-shuffle" class="btn btn-secondary" title="Shuffle Board Seed">
+                <span class="btn-icon emoji">🔀</span>
+                <span>Shuffle</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Game Duration -->
+          <div class="form-group">
+            <label for="game-duration-input" class="form-label">Game Duration (Hours)</label>
+            <input type="number" id="game-duration-input" class="form-input" value="5" min="1" max="24" step="0.5">
+          </div>
+
+          <!-- Grace Period -->
+          <div class="form-group">
+            <label for="grace-period-input" class="form-label">Grace Period (Minutes)</label>
+            <input type="number" id="grace-period-input" class="form-input" value="30" min="0" max="120">
+          </div>
+
+          <!-- Player Timer Duration -->
+          <div class="form-group">
+            <label for="timer-duration-input" class="form-label">Player Timer (Minutes)</label>
+            <input type="number" id="timer-duration-input" class="form-input" value="10" min="1" max="60">
+          </div>
+
+          <!-- Automatic Bingo Detection & Timers -->
+          <div class="form-group setup-col-full">
+            <label class="form-checkbox-label" for="auto-line-timers-input">
+              <input type="checkbox" id="auto-line-timers-input" class="form-checkbox">
+              <span class="checkbox-text">
+                <span class="checkbox-title">
+                  <span>Automatic Bingo Line Timers</span>
+                  <span class="badge badge-warning">Experimental</span>
+                </span>
+                <span class="checkbox-desc">Automatically starts the 10-minute defense timer and ends the match when a full row or column is completed. <span class="checkbox-recommendation">(Recommended off &mdash; manual timer coordination by players is preferred)</span></span>
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Board Arrangement Preview Section -->
+        <div class="setup-preview-section">
+          <div class="preview-header">
+            <h3 class="preview-title">Board Arrangement Preview</h3>
+            <span class="preview-hint">4x4 series-balanced layout (1 track per series in each row &amp; column)</span>
+          </div>
+          <div id="setup-board-preview" class="setup-preview-grid" role="grid" aria-label="Setup Board Preview">
+            <div class="preview-cell series-0" title="Track 01 (White)"><span class="preview-track-num">01</span><span class="preview-track-emoji emoji" aria-label="White track">⚪</span></div>
+            <div class="preview-cell series-1" title="Track 06 (Green)"><span class="preview-track-num">06</span><span class="preview-track-emoji emoji" aria-label="Green track">🟢</span></div>
+            <div class="preview-cell series-2" title="Track 11 (Blue)"><span class="preview-track-num">11</span><span class="preview-track-emoji emoji" aria-label="Blue track">🔵</span></div>
+            <div class="preview-cell series-3" title="Track 16 (Red)"><span class="preview-track-num">16</span><span class="preview-track-emoji emoji" aria-label="Red track">🔴</span></div>
+
+            <div class="preview-cell series-3" title="Track 17 (Red)"><span class="preview-track-num">17</span><span class="preview-track-emoji emoji" aria-label="Red track">🔴</span></div>
+            <div class="preview-cell series-2" title="Track 12 (Blue)"><span class="preview-track-num">12</span><span class="preview-track-emoji emoji" aria-label="Blue track">🔵</span></div>
+            <div class="preview-cell series-1" title="Track 07 (Green)"><span class="preview-track-num">07</span><span class="preview-track-emoji emoji" aria-label="Green track">🟢</span></div>
+            <div class="preview-cell series-0" title="Track 02 (White)"><span class="preview-track-num">02</span><span class="preview-track-emoji emoji" aria-label="White track">⚪</span></div>
+
+            <div class="preview-cell series-1" title="Track 08 (Green)"><span class="preview-track-num">08</span><span class="preview-track-emoji emoji" aria-label="Green track">🟢</span></div>
+            <div class="preview-cell series-0" title="Track 03 (White)"><span class="preview-track-num">03</span><span class="preview-track-emoji emoji" aria-label="White track">⚪</span></div>
+            <div class="preview-cell series-3" title="Track 18 (Red)"><span class="preview-track-num">18</span><span class="preview-track-emoji emoji" aria-label="Red track">🔴</span></div>
+            <div class="preview-cell series-2" title="Track 13 (Blue)"><span class="preview-track-num">13</span><span class="preview-track-emoji emoji" aria-label="Blue track">🔵</span></div>
+
+            <div class="preview-cell series-2" title="Track 14 (Blue)"><span class="preview-track-num">14</span><span class="preview-track-emoji emoji" aria-label="Blue track">🔵</span></div>
+            <div class="preview-cell series-3" title="Track 19 (Red)"><span class="preview-track-num">19</span><span class="preview-track-emoji emoji" aria-label="Red track">🔴</span></div>
+            <div class="preview-cell series-0" title="Track 04 (White)"><span class="preview-track-num">04</span><span class="preview-track-emoji emoji" aria-label="White track">⚪</span></div>
+            <div class="preview-cell series-1" title="Track 09 (Green)"><span class="preview-track-num">09</span><span class="preview-track-emoji emoji" aria-label="Green track">🟢</span></div>
+          </div>
+        </div>
+
+        <div class="setup-actions">
+          <button type="button" id="btn-start-game" class="btn btn-success btn-large">
+            <span class="btn-icon emoji">🚀</span>
+            <span>Start Bingo Game</span>
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <!-- Playing View (Live Match Mode) -->
+    <div id="view-playing" class="view-stage" hidden>
+      <!-- Active Session Status Bar (Visible when game is running or stopped) -->
+      <section id="active-session-bar" class="panel panel-status">
+        <div class="status-summary">
+          <div class="status-metric">
+            <span class="metric-label">Game Status</span>
+            <span id="game-status-badge" class="badge badge-success">Active</span>
+          </div>
+          <div class="status-metric">
+            <span class="metric-label">Campaign</span>
+            <span id="active-campaign-name" class="metric-value">—</span>
+          </div>
+          <div class="status-metric">
+            <span class="metric-label">Session Remaining</span>
+            <span id="game-remaining-clock" class="metric-value font-mono">05:00:00</span>
+          </div>
+          <div id="grace-metric" class="status-metric">
+            <span class="metric-label">Grace Period</span>
+            <span id="grace-status-badge" class="badge badge-warning">Active (30:00)</span>
+          </div>
+        </div>
+
+        <div class="status-actions">
+          <button type="button" id="btn-stop-game" class="btn btn-warning">
+            <span class="btn-icon emoji">⏹️</span>
+            <span>Stop</span>
+          </button>
+          <button type="button" id="btn-reset-game" class="btn btn-danger">
+            <span class="btn-icon emoji">🔄</span>
+            <span>Reset</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- Main Challenge Content: Grid, Timers, Records -->
+      <main class="challenge-layout">
+      <!-- Left Column: Bingo Board -->
+      <section class="board-column">
+        <!-- 4x4 Bingo Grid -->
+        <div id="bingo-board" class="bingo-grid" role="grid" aria-label="Trackmania Bingo Board">
+          <div class="track-cell series-0 owner-unclaimed" data-cell-index="0" data-track-number="1">
+            <div class="cell-top"><span class="cell-track-num">01</span><span class="cell-series-emoji emoji" title="White track">⚪</span></div>
+            <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
+            <div class="cell-deltas">
+              <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+              <div class="delta-row delta-p3"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+            </div>
+          </div>
+          <div class="track-cell series-1 owner-unclaimed" data-cell-index="1" data-track-number="6">
+            <div class="cell-top"><span class="cell-track-num">06</span><span class="cell-series-emoji emoji" title="Green track">🟢</span></div>
+            <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
+            <div class="cell-deltas">
+              <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+              <div class="delta-row delta-p3"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+            </div>
+          </div>
+          <div class="track-cell series-2 owner-unclaimed" data-cell-index="2" data-track-number="11">
+            <div class="cell-top"><span class="cell-track-num">11</span><span class="cell-series-emoji emoji" title="Blue track">🔵</span></div>
+            <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
+            <div class="cell-deltas">
+              <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+              <div class="delta-row delta-p3"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+            </div>
+          </div>
+          <div class="track-cell series-3 owner-unclaimed" data-cell-index="3" data-track-number="16">
+            <div class="cell-top"><span class="cell-track-num">16</span><span class="cell-series-emoji emoji" title="Red track">🔴</span></div>
+            <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
+            <div class="cell-deltas">
+              <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+              <div class="delta-row delta-p3"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+            </div>
+          </div>
+
+          <div class="track-cell series-3 owner-unclaimed" data-cell-index="4" data-track-number="17">
+            <div class="cell-top"><span class="cell-track-num">17</span><span class="cell-series-emoji emoji" title="Red track">🔴</span></div>
+            <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
+            <div class="cell-deltas">
+              <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+              <div class="delta-row delta-p3"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+            </div>
+          </div>
+          <div class="track-cell series-2 owner-unclaimed" data-cell-index="5" data-track-number="12">
+            <div class="cell-top"><span class="cell-track-num">12</span><span class="cell-series-emoji emoji" title="Blue track">🔵</span></div>
+            <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
+            <div class="cell-deltas">
+              <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+              <div class="delta-row delta-p3"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+            </div>
+          </div>
+          <div class="track-cell series-1 owner-unclaimed" data-cell-index="6" data-track-number="7">
+            <div class="cell-top"><span class="cell-track-num">07</span><span class="cell-series-emoji emoji" title="Green track">🟢</span></div>
+            <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
+            <div class="cell-deltas">
+              <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+              <div class="delta-row delta-p3"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+            </div>
+          </div>
+          <div class="track-cell series-0 owner-unclaimed" data-cell-index="7" data-track-number="2">
+            <div class="cell-top"><span class="cell-track-num">02</span><span class="cell-series-emoji emoji" title="White track">⚪</span></div>
+            <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
+            <div class="cell-deltas">
+              <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+              <div class="delta-row delta-p3"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+            </div>
+          </div>
+
+          <div class="track-cell series-1 owner-unclaimed" data-cell-index="8" data-track-number="8">
+            <div class="cell-top"><span class="cell-track-num">08</span><span class="cell-series-emoji emoji" title="Green track">🟢</span></div>
+            <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
+            <div class="cell-deltas">
+              <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+              <div class="delta-row delta-p3"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+            </div>
+          </div>
+          <div class="track-cell series-0 owner-unclaimed" data-cell-index="9" data-track-number="3">
+            <div class="cell-top"><span class="cell-track-num">03</span><span class="cell-series-emoji emoji" title="White track">⚪</span></div>
+            <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
+            <div class="cell-deltas">
+              <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+              <div class="delta-row delta-p3"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+            </div>
+          </div>
+          <div class="track-cell series-3 owner-unclaimed" data-cell-index="10" data-track-number="18">
+            <div class="cell-top"><span class="cell-track-num">18</span><span class="cell-series-emoji emoji" title="Red track">🔴</span></div>
+            <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
+            <div class="cell-deltas">
+              <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+              <div class="delta-row delta-p3"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+            </div>
+          </div>
+          <div class="track-cell series-2 owner-unclaimed" data-cell-index="11" data-track-number="13">
+            <div class="cell-top"><span class="cell-track-num">13</span><span class="cell-series-emoji emoji" title="Blue track">🔵</span></div>
+            <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
+            <div class="cell-deltas">
+              <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+              <div class="delta-row delta-p3"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+            </div>
+          </div>
+
+          <div class="track-cell series-2 owner-unclaimed" data-cell-index="12" data-track-number="14">
+            <div class="cell-top"><span class="cell-track-num">14</span><span class="cell-series-emoji emoji" title="Blue track">🔵</span></div>
+            <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
+            <div class="cell-deltas">
+              <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+              <div class="delta-row delta-p3"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+            </div>
+          </div>
+          <div class="track-cell series-3 owner-unclaimed" data-cell-index="13" data-track-number="19">
+            <div class="cell-top"><span class="cell-track-num">19</span><span class="cell-series-emoji emoji" title="Red track">🔴</span></div>
+            <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
+            <div class="cell-deltas">
+              <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+              <div class="delta-row delta-p3"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+            </div>
+          </div>
+          <div class="track-cell series-0 owner-unclaimed" data-cell-index="14" data-track-number="4">
+            <div class="cell-top"><span class="cell-track-num">04</span><span class="cell-series-emoji emoji" title="White track">⚪</span></div>
+            <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
+            <div class="cell-deltas">
+              <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+              <div class="delta-row delta-p3"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+            </div>
+          </div>
+          <div class="track-cell series-1 owner-unclaimed" data-cell-index="15" data-track-number="9">
+            <div class="cell-top"><span class="cell-track-num">09</span><span class="cell-series-emoji emoji" title="Green track">🟢</span></div>
+            <div class="cell-primary"><div class="cell-record-time font-mono">--:--.---</div><div class="cell-owner-label">Unclaimed</div></div>
+            <div class="cell-deltas">
+              <div class="delta-row delta-p2"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+              <div class="delta-row delta-p3"><span class="delta-name">—</span><span class="delta-time font-mono">—</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Column: Player Timers and Live Records Feed -->
+      <aside class="sidebar-column">
+        <!-- Player Timers -->
+        <section class="panel panel-timers">
+          <div class="column-header">
+            <h2 class="section-title">Player Timers</h2>
+            <span class="badge badge-subtle">10m Limit</span>
+          </div>
+
+          <div id="player-timers" class="timers-stack">
+            <!-- Eljay Card -->
+            <div class="player-card player-eljay" data-player-id="7e468ff6-4558-43ce-ad23-591dd86291c0">
+              <div class="player-header">
+                <div class="player-identity">
+                  <span class="player-avatar">E</span>
+                  <h3 class="player-name">Eljay</h3>
+                </div>
+                <div class="timer-actions-group">
+                  <span class="timer-display font-mono">10:00</span>
+                  <button type="button" class="btn btn-sm btn-timer-toggle btn-timer-start" data-action="start" data-account="7e468ff6-4558-43ce-ad23-591dd86291c0">Start</button>
+                </div>
+              </div>
+              <div class="progress-bar-container" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
+                <div class="progress-bar-fill" style="width: 100%;"></div>
+              </div>
+            </div>
+
+            <!-- Lry Card -->
+            <div class="player-card player-lry" data-player-id="f00ab19a-14e5-4e6e-9a45-78f1af8487e1">
+              <div class="player-header">
+                <div class="player-identity">
+                  <span class="player-avatar">L</span>
+                  <h3 class="player-name">Lry</h3>
+                </div>
+                <div class="timer-actions-group">
+                  <span class="timer-display font-mono">10:00</span>
+                  <button type="button" class="btn btn-sm btn-timer-toggle btn-timer-start" data-action="start" data-account="f00ab19a-14e5-4e6e-9a45-78f1af8487e1">Start</button>
+                </div>
+              </div>
+              <div class="progress-bar-container" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
+                <div class="progress-bar-fill" style="width: 100%;"></div>
+              </div>
+            </div>
+
+            <!-- Timo Card -->
+            <div class="player-card player-timo" data-player-id="b9b79f89-19e7-4f26-be01-03556b8890b9">
+              <div class="player-header">
+                <div class="player-identity">
+                  <span class="player-avatar">T</span>
+                  <h3 class="player-name">Timo</h3>
+                </div>
+                <div class="timer-actions-group">
+                  <span class="timer-display font-mono">10:00</span>
+                  <button type="button" class="btn btn-sm btn-timer-toggle btn-timer-start" data-action="start" data-account="b9b79f89-19e7-4f26-be01-03556b8890b9">Start</button>
+                </div>
+              </div>
+              <div class="progress-bar-container" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
+                <div class="progress-bar-fill" style="width: 100%;"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Live PB Record History Feed -->
+        <section class="panel panel-records">
+          <div class="column-header">
+            <h2 class="section-title">Live PB Records</h2>
+            <span id="record-count" class="badge badge-subtle">0 Records</span>
+          </div>
+
+          <div id="record-feed" class="record-feed-container" aria-live="polite">
+            <div class="record-empty">
+              <span class="empty-icon"><span class="emoji">⏱️</span></span>
+              <p>No personal bests recorded yet.</p>
+              <p class="empty-hint">New records will appear here live during the challenge.</p>
+            </div>
+          </div>
+        </section>
+      </aside>
+      </main>
+    </div>
+  </div>
+
+  <script src="/static/app.js?v=2" defer></script>
+</body>
+</html>
