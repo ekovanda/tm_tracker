@@ -13,7 +13,7 @@ The project makes a live Trackmania challenge easy to run and follow:
 - Coordinate leaderboard polling across viewers with shared snapshots, aggregate pacing, and bounded recovery from transient service limits.
 - Keep a timestamped record of newly observed personal bests during the session.
 - Show the shared game state and one independently controlled timer for each player with client-side countdown calculations.
-- Configure campaign, player timer duration, opening grace period, and maximum game length before starting.
+- Configure campaign, player timer duration, opening grace period, maximum game length, and optional automatic line defense timers before starting.
 - Automatically checkpoint active game state and player timers to Firestore, rehydrating sessions across server restarts or redeployments.
 
 ## Live Deployment
@@ -29,6 +29,9 @@ The project makes a live Trackmania challenge easy to run and follow:
 - (Optional) Google Cloud Project with Firestore enabled for persistent game checkpointing
 
 ## Setup
+
+> [!TIP]
+> **New to the project or backend development?** See the step-by-step [Collaborator's Getting Started Guide](CONTRIBUTING.md) for a plain-English walkthrough of how the system works, mental models, `.env` setup, and local development.
 
 From PowerShell / bash in the repository root:
 
