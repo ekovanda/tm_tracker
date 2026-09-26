@@ -537,6 +537,7 @@ def _serialize_canonical_game(
             "grace_period_seconds": pending.settings.grace_period.total_seconds(),
             "manual_timer_duration_seconds": pending.settings.manual_timer_duration.total_seconds(),
             "board_seed": pending.settings.board_seed,
+            "auto_line_timers": pending.settings.auto_line_timers,
         },
         "board": preview_board,
     }
@@ -591,12 +592,14 @@ def _serialize_canonical_game(
                     state.settings.manual_timer_duration.total_seconds()
                 ),
                 "board_seed": state.settings.board_seed,
+                "auto_line_timers": state.settings.auto_line_timers,
             },
             "game_duration_seconds": state.settings.game_duration.total_seconds(),
             "grace_period_seconds": state.settings.grace_period.total_seconds(),
             "manual_timer_duration_seconds": (
                 state.settings.manual_timer_duration.total_seconds()
             ),
+            "auto_line_timers": state.settings.auto_line_timers,
             "winner": _serialize_player(state.winner),
             "timer_owner": _serialize_player(state.timer_owner),
             "timer_started_at": (
@@ -625,6 +628,7 @@ class ConfigureGameRequest(BaseModel):
     grace_period_seconds: int | None = None
     manual_timer_duration_minutes: int | None = None
     manual_timer_duration_seconds: int | None = None
+    auto_line_timers: bool | None = None
 
 
 class StartGameRequest(BaseModel):
@@ -636,6 +640,7 @@ class StartGameRequest(BaseModel):
     grace_period_seconds: int | None = None
     manual_timer_duration_minutes: int | None = None
     manual_timer_duration_seconds: int | None = None
+    auto_line_timers: bool | None = None
 
 
 class TimerActionRequest(BaseModel):
@@ -694,11 +699,18 @@ def configure_game(payload: ConfigureGameRequest) -> dict[str, Any]:
         else current_settings.board_seed
     )
 
+    auto_line_timers = (
+        payload.auto_line_timers
+        if payload.auto_line_timers is not None
+        else current_settings.auto_line_timers
+    )
+
     new_settings = BingoSettings(
         game_duration=game_duration,
         grace_period=grace_period,
         manual_timer_duration=manual_timer_duration,
         board_seed=board_seed,
+        auto_line_timers=auto_line_timers,
     )
     campaign_id = (
         payload.campaign_id
@@ -750,6 +762,11 @@ def start_game(payload: StartGameRequest) -> dict[str, Any]:
             else current_settings.manual_timer_duration
         )
     )
+    auto_line_timers = (
+        payload.auto_line_timers
+        if payload.auto_line_timers is not None
+        else current_settings.auto_line_timers
+    )
     settings = BingoSettings(
         game_duration=game_duration,
         grace_period=grace_period,
@@ -759,6 +776,7 @@ def start_game(payload: StartGameRequest) -> dict[str, Any]:
             if payload.board_seed is not None
             else current_settings.board_seed
         ),
+        auto_line_timers=auto_line_timers,
     )
 
     try:

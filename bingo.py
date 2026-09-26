@@ -37,6 +37,7 @@ class BingoSettings:
     grace_period: timedelta = GRACE_PERIOD
     manual_timer_duration: timedelta = MANUAL_TIMER_DURATION
     board_seed: int = 0
+    auto_line_timers: bool = False
 
 
 @dataclass(frozen=True)
@@ -139,24 +140,37 @@ def _ranking_by_track(records: Iterable[dict]) -> dict[int, TrackRanking]:
     return rankings
 
 
-def _lines(board: tuple[tuple[TrackRanking, ...], ...]) -> list[tuple[Player, ...]]:
-    lines = [*board, *zip(*board)]
-    return [
-        tuple(cell.owner for cell in line)
-        for line in lines
-        if all(cell.owner is not None for cell in line)
+def _lines(
+    board: tuple[tuple[TrackRanking, ...], ...],
+) -> list[tuple[TrackRanking, ...]]:
+    size = len(board)
+    if size == 0:
+        return []
+    lines = [
+        *board,
+        *zip(*board),
     ]
+    return [tuple(line) for line in lines]
+
+
+def _line_owners(board: tuple[tuple[TrackRanking, ...], ...]) -> set[Player]:
+    owners: set[Player] = set()
+    for line in _lines(board):
+        if not line:
+            continue
+        first_owner = line[0].owner
+        if first_owner is not None and all(cell.owner == first_owner for cell in line):
+            owners.add(first_owner)
+    return owners
 
 
 def _line_owner(
     board: tuple[tuple[TrackRanking, ...], ...], current_owner: Player | None
 ) -> Player | None:
-    owners = _lines(board)
-    if current_owner is not None and any(
-        all(owner == current_owner for owner in line) for line in owners
-    ):
+    owners = _line_owners(board)
+    if current_owner is not None and current_owner in owners:
         return current_owner
-    return owners[0][0] if owners else None
+    return min(owners, key=lambda p: p.account_id) if owners else None
 
 
 def start_bingo(
@@ -265,10 +279,11 @@ def update_bingo_state(
         )
         for row in grid_tracks
     )
-    if grace_period_active(state, now):
-        return replace(state, board=board, timer_owner=None, timer_started_at=None)
-
-    owner = _line_owner(board, state.timer_owner)
+    owner = (
+        _line_owner(board, state.timer_owner)
+        if state.settings.auto_line_timers and not grace_period_active(state, now)
+        else None
+    )
     if owner is None:
         return replace(state, board=board, timer_owner=None, timer_started_at=None)
     timer_started_at = state.timer_started_at

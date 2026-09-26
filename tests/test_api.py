@@ -223,6 +223,7 @@ def test_configure_game():
     assert data["pending"]["settings"]["game_duration_seconds"] == 180 * 60
     assert data["pending"]["settings"]["grace_period_seconds"] == 15 * 60
     assert data["pending"]["settings"]["manual_timer_duration_seconds"] == 5 * 60
+    assert data["pending"]["settings"]["auto_line_timers"] is False
 
 
 def test_configure_and_start_game_with_seconds():
@@ -235,6 +236,7 @@ def test_configure_and_start_game_with_seconds():
             "game_duration_seconds": 7200,
             "grace_period_seconds": 900,
             "manual_timer_duration_seconds": 450,
+            "auto_line_timers": True,
         },
     )
     assert response.status_code == 200
@@ -242,6 +244,7 @@ def test_configure_and_start_game_with_seconds():
     assert data["pending"]["settings"]["game_duration_seconds"] == 7200
     assert data["pending"]["settings"]["grace_period_seconds"] == 900
     assert data["pending"]["settings"]["manual_timer_duration_seconds"] == 450
+    assert data["pending"]["settings"]["auto_line_timers"] is True
 
 
 def test_start_game_validation():

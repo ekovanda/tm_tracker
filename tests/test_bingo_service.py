@@ -207,7 +207,7 @@ def test_poll_logs_only_new_records_and_updates_bingo_state():
         "jwt",
         START,
         make_loader(),
-        BingoSettings(grace_period=timedelta()),
+        BingoSettings(grace_period=timedelta(), auto_line_timers=True),
     )
     first = poll_session(
         session,

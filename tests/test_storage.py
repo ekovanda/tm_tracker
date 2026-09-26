@@ -83,6 +83,7 @@ def test_serialize_deserialize_pending_only():
         minutes=8
     )
     assert persisted.canonical_game.pending.settings.board_seed == 42
+    assert persisted.canonical_game.pending.settings.auto_line_timers is False
     assert not persisted.timers
 
 
@@ -96,6 +97,7 @@ def test_serialize_deserialize_active_session_and_timers():
         grace_period=timedelta(minutes=30),
         manual_timer_duration=timedelta(minutes=10),
         board_seed=99,
+        auto_line_timers=True,
     )
     state = BingoState(
         started_at=now,
@@ -156,6 +158,7 @@ def test_serialize_deserialize_active_session_and_timers():
     assert restored_session.state.timer_owner == PLAYERS[1]
     assert restored_session.state.timer_started_at == now + timedelta(minutes=5)
     assert restored_session.state.settings.board_seed == 99
+    assert restored_session.state.settings.auto_line_timers is True
 
     # Check board cell rankings
     first_cell = restored_session.state.board[0][0]
@@ -514,3 +517,89 @@ def test_canonical_game_store_checkpoint_and_rehydration():
     fresh_store = CanonicalGameStore(persistence=persistence)
     assert not fresh_store.rehydrate()
     assert fresh_store.get().session is None
+
+
+def test_firestore_payload_has_no_nested_arrays():
+    """Verify that Firestore serialization never generates nested arrays (list in list)."""
+    now = datetime(2026, 9, 23, 10, 0, tzinfo=UTC)
+    tracks = _sample_tracks()
+    board = _sample_board(tracks)
+    state = BingoState(
+        started_at=now,
+        board=board,
+        status="active",
+    )
+    records = (
+        RecordEntry(
+            observed_at=now,
+            track=tracks[0],
+            player=PLAYERS[0],
+            time=45000,
+        ),
+    )
+    seen_records = frozenset([(tracks[0].uid, PLAYERS[0].account_id, 45000)])
+    session = BingoSession(
+        campaign_id="camp-nested-test",
+        tracks=tracks,
+        state=state,
+        records=records,
+        seen_records=seen_records,
+    )
+    game_state = CanonicalGameState(
+        pending=PendingGame(campaign_id="camp-nested-test"),
+        session=session,
+    )
+
+    payload = serialize_game_state(game_state)
+
+    def assert_no_nested_arrays(obj, path="root"):
+        if isinstance(obj, list):
+            for i, item in enumerate(obj):
+                assert not isinstance(item, list), (
+                    f"Nested array found at {path}[{i}]: {item}"
+                )
+                assert_no_nested_arrays(item, f"{path}[{i}]")
+        elif isinstance(obj, dict):
+            for k, v in obj.items():
+                assert_no_nested_arrays(v, f"{path}.{k}")
+
+    assert_no_nested_arrays(payload)
+
+
+def test_deserialize_legacy_nested_array_format():
+    """Ensure older persisted snapshots with 2D board arrays deserialize correctly."""
+    now = datetime(2026, 9, 23, 10, 0, tzinfo=UTC)
+    tracks = _sample_tracks()
+    board = _sample_board(tracks)
+    state = BingoState(
+        started_at=now,
+        board=board,
+        status="active",
+    )
+    session = BingoSession(
+        campaign_id="camp-legacy",
+        tracks=tracks,
+        state=state,
+        records=(),
+        seen_records=frozenset([(tracks[0].uid, PLAYERS[0].account_id, 45000)]),
+    )
+    game_state = CanonicalGameState(session=session)
+    payload = serialize_game_state(game_state)
+
+    # Convert to legacy 2D list format
+    legacy_board = [row["cells"] for row in payload["session"]["state"]["board"]]
+    payload["session"]["state"]["board"] = legacy_board
+    payload["session"]["seen_records"] = [
+        [item["track_uid"], item["player_id"], item["time"]]
+        for item in payload["session"]["seen_records"]
+    ]
+
+    persisted = deserialize_game_state(payload)
+    assert persisted.canonical_game.session is not None
+    assert len(persisted.canonical_game.session.state.board) == 4
+    assert len(persisted.canonical_game.session.state.board[0]) == 4
+    assert (
+        tracks[0].uid,
+        PLAYERS[0].account_id,
+        45000,
+    ) in persisted.canonical_game.session.seen_records

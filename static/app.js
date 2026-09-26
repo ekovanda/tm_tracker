@@ -533,6 +533,15 @@
           ) {
             timerInput.value = Math.round(pending.settings.manual_timer_duration_seconds / 60);
           }
+
+          const autoLineInput = document.getElementById('auto-line-timers-input');
+          if (
+            autoLineInput &&
+            pending.settings.auto_line_timers != null &&
+            document.activeElement !== autoLineInput
+          ) {
+            autoLineInput.checked = Boolean(pending.settings.auto_line_timers);
+          }
         }
 
         if (pending && pending.board) {
@@ -752,6 +761,7 @@
       const gameDurationInput = document.getElementById('game-duration-input');
       const graceInput = document.getElementById('grace-period-input');
       const timerInput = document.getElementById('timer-duration-input');
+      const autoLineInput = document.getElementById('auto-line-timers-input');
 
       const payload = {};
       if (campSelect && campSelect.value) {
@@ -772,6 +782,9 @@
       if (timerInput && timerInput.value) {
         const parsed = parseInt(timerInput.value, 10);
         if (!isNaN(parsed) && parsed > 0) payload.manual_timer_duration_seconds = Math.round(parsed * 60);
+      }
+      if (autoLineInput) {
+        payload.auto_line_timers = autoLineInput.checked;
       }
 
       if (Object.keys(payload).length === 0) return;
@@ -836,6 +849,7 @@
         'game-duration-input',
         'grace-period-input',
         'timer-duration-input',
+        'auto-line-timers-input',
       ];
       for (const id of configInputs) {
         const el = document.getElementById(id);
@@ -879,6 +893,7 @@
           const gameDurationInput = document.getElementById('game-duration-input');
           const graceInput = document.getElementById('grace-period-input');
           const timerInput = document.getElementById('timer-duration-input');
+          const autoLineInput = document.getElementById('auto-line-timers-input');
 
           const campaignId = campSelect ? campSelect.value : '';
           if (!campaignId) {
@@ -893,6 +908,7 @@
             game_duration_seconds: gameDurationInput ? Math.round(parseFloat(gameDurationInput.value) * 3600) : 18000,
             grace_period_seconds: (!isNaN(graceVal) && graceVal >= 0) ? Math.round(graceVal * 60) : 1800,
             manual_timer_duration_seconds: timerInput ? Math.round(parseInt(timerInput.value, 10) * 60) : 600,
+            auto_line_timers: autoLineInput ? autoLineInput.checked : false,
           };
 
           const originalText = startBtn.textContent;

@@ -88,7 +88,7 @@ def _parse_datetime(value: Any) -> datetime | None:
 
 def _serialize_session(session: BingoSession) -> dict[str, Any]:
     state = session.state
-    board_payload: list[list[dict[str, Any]]] = []
+    board_payload: list[dict[str, Any]] = []
     for row in state.board:
         row_payload = []
         for cell in row:
@@ -105,7 +105,7 @@ def _serialize_session(session: BingoSession) -> dict[str, Any]:
                 "margin": cell.margin,
             }
             row_payload.append(cell_payload)
-        board_payload.append(row_payload)
+        board_payload.append({"cells": row_payload})
 
     records_payload = [
         {
@@ -117,7 +117,10 @@ def _serialize_session(session: BingoSession) -> dict[str, Any]:
         for entry in session.records
     ]
 
-    seen_records_payload = [list(item) for item in session.seen_records]
+    seen_records_payload = [
+        {"track_uid": str(item[0]), "player_id": str(item[1]), "time": int(item[2])}
+        for item in session.seen_records
+    ]
 
     return {
         "campaign_id": session.campaign_id,
@@ -137,6 +140,7 @@ def _serialize_session(session: BingoSession) -> dict[str, Any]:
                     state.settings.manual_timer_duration.total_seconds()
                 ),
                 "board_seed": state.settings.board_seed,
+                "auto_line_timers": state.settings.auto_line_timers,
             },
             "board": board_payload,
         },
@@ -161,6 +165,7 @@ def serialize_game_state(
                 pending.settings.manual_timer_duration.total_seconds()
             ),
             "board_seed": pending.settings.board_seed,
+            "auto_line_timers": pending.settings.auto_line_timers,
         },
     }
 
@@ -217,10 +222,21 @@ def _deserialize_session(session_data: dict[str, Any]) -> BingoSession:
             seconds=state_settings_data.get("manual_timer_duration_seconds", 600.0)
         ),
         board_seed=int(state_settings_data.get("board_seed", 0)),
+        auto_line_timers=bool(state_settings_data.get("auto_line_timers", False)),
     )
 
     board_rows: list[tuple[TrackRanking, ...]] = []
-    for row_data in state_data.get("board", ()):
+    raw_board = state_data.get("board", ())
+    if isinstance(raw_board, dict) and "rows" in raw_board:
+        raw_rows = raw_board["rows"]
+    else:
+        raw_rows = raw_board
+
+    for row_entry in raw_rows:
+        if isinstance(row_entry, dict) and "cells" in row_entry:
+            row_data = row_entry["cells"]
+        else:
+            row_data = row_entry
         cell_list: list[TrackRanking] = []
         for cell_data in row_data:
             cell_track = _deserialize_track(cell_data["track"])
@@ -260,10 +276,16 @@ def _deserialize_session(session_data: dict[str, Any]) -> BingoSession:
         for r_data in session_data.get("records", ())
     )
 
-    seen_records = frozenset(
-        (str(item[0]), str(item[1]), int(item[2]))
-        for item in session_data.get("seen_records", ())
-    )
+    seen_records_raw = session_data.get("seen_records", ())
+    seen_records_list = []
+    for item in seen_records_raw:
+        if isinstance(item, dict):
+            seen_records_list.append(
+                (str(item["track_uid"]), str(item["player_id"]), int(item["time"]))
+            )
+        else:
+            seen_records_list.append((str(item[0]), str(item[1]), int(item[2])))
+    seen_records = frozenset(seen_records_list)
 
     return BingoSession(
         campaign_id=campaign_id,
@@ -290,6 +312,7 @@ def deserialize_game_state(data: dict[str, Any]) -> PersistedState:
             seconds=pending_settings_data.get("manual_timer_duration_seconds", 600.0)
         ),
         board_seed=int(pending_settings_data.get("board_seed", 0)),
+        auto_line_timers=bool(pending_settings_data.get("auto_line_timers", False)),
     )
     pending = PendingGame(
         campaign_id=pending_data.get("campaign_id"),
