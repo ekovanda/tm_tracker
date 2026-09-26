@@ -3,8 +3,21 @@
 ## Project
 
 - This is a Python application for tracking Trackmania Bingo data with a FastAPI backend and JS frontend.
+- This is a learning project for API design and GCP infrastructure management.
 - Preserve the existing module boundaries and use the current code as the style reference.
 - Keep changes focused. Do not refactor unrelated code while implementing a feature.
+
+## Learning and Collaboration
+
+- Be helpful and instructive in responses, highlighting concepts and rationale.
+- Be opinionated on technical design and best practices, proactively advising on technical implications, architectural trade-offs, and failure modes.
+- Test the user's knowledge and understanding occasionally and offer opportunities for learning.
+- Unless explicitly instructed to implement silently, surface architectural trade-offs, API design decisions, and learning opportunities at appropriate times.
+
+## Cloud Infrastructure and Costs
+
+- Proactively inform and warn about operations or infrastructure decisions likely to incur costs, especially potentially significant ones.
+- Bear in mind that while the application is not widely distributed, services can accidentally run unobserved (e.g., idle compute, uncleaned resources, or missing scale-to-zero defaults). Recommend cost-effective, low-maintenance patterns with automatic scale-to-zero or explicit teardown.
 
 ## Workflow
 
